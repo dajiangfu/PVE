@@ -10,57 +10,57 @@ function red(){
   echo -e "\033[31m\033[01m$1\033[0m"
 }
 
-#ÉèÖÃwebµÇÂ¼Ò³Ä¬ÈÏÓïÑÔÎª¼òÌåÖĞÎÄ
+#è®¾ç½®webç™»å½•é¡µé»˜è®¤è¯­è¨€ä¸ºç®€ä½“ä¸­æ–‡
 function set_default_language_zh_CN(){
   echo 'language: zh_CN' >>/etc/pve/datacenter.cfg
-  #ÖØÆô·şÎñ
+  #é‡å¯æœåŠ¡
   systemctl restart pvedaemon.service
 }
 
-#É¾³ılocal_lvm
-#PVE°²×°ºÃºóµÄµÚÒ»¼şÊÂ¾ÍÊÇÉ¾³ılocal-lvm·ÖÇø
-#PVEÏµÍ³ÔÚ°²×°µÄÊ±ºòÄ¬ÈÏ»á°Ñ´¢´æ»®·ÖÎªlocalºÍlocal-lvmÁ½¸ö¿é£¬ÔÚÊµ¼ÊÊ¹ÓÃµÄÊ±ºòÍùÍùÆäÖĞÒ»¸ö²»¹»ÓÃÁËÁíÒ»¸ö»¹ºÜ¿ÕµÄÇé¿ö£¬¿ÉÒÔÉ¾³ılocal-lvmµÄ¿Õ¼ä£¬È»ºó°ÑÈ«²¿·ÖÅä¸ølocal£¬·½±ã×Ô¼º¹ÜÀí
+#åˆ é™¤local_lvm
+#PVEå®‰è£…å¥½åçš„ç¬¬ä¸€ä»¶äº‹å°±æ˜¯åˆ é™¤local-lvmåˆ†åŒº
+#PVEç³»ç»Ÿåœ¨å®‰è£…çš„æ—¶å€™é»˜è®¤ä¼šæŠŠå‚¨å­˜åˆ’åˆ†ä¸ºlocalå’Œlocal-lvmä¸¤ä¸ªå—ï¼Œåœ¨å®é™…ä½¿ç”¨çš„æ—¶å€™å¾€å¾€å…¶ä¸­ä¸€ä¸ªä¸å¤Ÿç”¨äº†å¦ä¸€ä¸ªè¿˜å¾ˆç©ºçš„æƒ…å†µï¼Œå¯ä»¥åˆ é™¤local-lvmçš„ç©ºé—´ï¼Œç„¶åæŠŠå…¨éƒ¨åˆ†é…ç»™localï¼Œæ–¹ä¾¿è‡ªå·±ç®¡ç†
 function delete_local_lvm(){
   lvremove pve/data
   lvextend -l +100%FREE -r pve/root
-  #Íê³ÉÃüÁîºóĞèÒªÊÖ¶¯½øÈëµ½pveµÄwebui²Ù×÷£¬Êı¾İÖĞĞÄ--´æ´¢--local-lvm--ÒÆ³ı£¬ÕâÑù¾ÍÉ¾µôÁËlocal-lvmµÄ¿Õ¼ä¡£
-  #Êı¾İÖĞĞÄ--´æ´¢--local-±à¼­£¬ÔÚÄÚÈİÕâÀï£¬°ÑËùÓĞµÄÑ¡Ïî¶¼Ñ¡ÉÏ£¬È»ºóÔÚPVE½ÚµãµÄ¸ÅÒªÀï¿´ÏÂÓ²ÅÌ¿Õ¼ä£¬¿ÉÒÔ¿´µ½¿Õ¼ä±»ÍêÕûµÄÀûÓÃÁË
+  #å®Œæˆå‘½ä»¤åéœ€è¦æ‰‹åŠ¨è¿›å…¥åˆ°pveçš„webuiæ“ä½œï¼Œæ•°æ®ä¸­å¿ƒ--å­˜å‚¨--local-lvm--ç§»é™¤ï¼Œè¿™æ ·å°±åˆ æ‰äº†local-lvmçš„ç©ºé—´ã€‚
+  #æ•°æ®ä¸­å¿ƒ--å­˜å‚¨--local-ç¼–è¾‘ï¼Œåœ¨å†…å®¹è¿™é‡Œï¼ŒæŠŠæ‰€æœ‰çš„é€‰é¡¹éƒ½é€‰ä¸Šï¼Œç„¶ååœ¨PVEèŠ‚ç‚¹çš„æ¦‚è¦é‡Œçœ‹ä¸‹ç¡¬ç›˜ç©ºé—´ï¼Œå¯ä»¥çœ‹åˆ°ç©ºé—´è¢«å®Œæ•´çš„åˆ©ç”¨äº†
 }
 
-#¸üĞÂpveÏµÍ³
+#æ›´æ–°pveç³»ç»Ÿ
 function update_pve(){
-  #¼ì²éÄãµÄsources.listÎÄ¼ş£¬½¨Òé¾¡¿ÉÄÜÊ¹ÓÃ¹Ù·½Ô´²»ÊÇÌæ»»µÄµÚÈı·½Ô´£¬ÈçÍøÂçÊµÔÚÁ¬²»ÉÏ¹Ù·½Ô´ÔòÊ¹ÓÃµÚÈı·½Ô´
-  #¸üĞÂ´æ´¢¿âºÍ°ü£¬Èç¹û³öÏÖÈÎºÎ´íÎó£¬Ôò±íÊ¾ÄúµÄsources.list£¨»òÄúµÄÍøÂç»ò¶©ÔÄÃÜÔ¿×´Ì¬£©´æÔÚÎÊÌâ
+  #æ£€æŸ¥ä½ çš„sources.listæ–‡ä»¶ï¼Œå»ºè®®å°½å¯èƒ½ä½¿ç”¨å®˜æ–¹æºä¸æ˜¯æ›¿æ¢çš„ç¬¬ä¸‰æ–¹æºï¼Œå¦‚ç½‘ç»œå®åœ¨è¿ä¸ä¸Šå®˜æ–¹æºåˆ™ä½¿ç”¨ç¬¬ä¸‰æ–¹æº
+  #æ›´æ–°å­˜å‚¨åº“å’ŒåŒ…ï¼Œå¦‚æœå‡ºç°ä»»ä½•é”™è¯¯ï¼Œåˆ™è¡¨ç¤ºæ‚¨çš„sources.listï¼ˆæˆ–æ‚¨çš„ç½‘ç»œæˆ–è®¢é˜…å¯†é’¥çŠ¶æ€ï¼‰å­˜åœ¨é—®é¢˜
   apt update
 
-  #Éı¼¶Èí¼ş°ü
+  #å‡çº§è½¯ä»¶åŒ…
   apt dist-upgrade
 }
 
-#È¡ÏûÎŞĞ§¶©ÔÄµ¯´°
+#å–æ¶ˆæ— æ•ˆè®¢é˜…å¼¹çª—
 function delete_invalid_subscription_popup(){
   sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
   systemctl restart pveproxy.service
-  # Ö´ĞĞÍê³Éºó£¬ä¯ÀÀÆ÷Ctrl+F5Ç¿ÖÆË¢ĞÂ»º´æ
+  # æ‰§è¡Œå®Œæˆåï¼Œæµè§ˆå™¨Ctrl+F5å¼ºåˆ¶åˆ·æ–°ç¼“å­˜
 }
 
-#PVEÈí¼şÔ´¸ü»»
+#PVEè½¯ä»¶æºæ›´æ¢
 function change_source(){
-  #Ç¿ÁÒ½¨ÒéÏÈÉ¾³ıÆóÒµÔ´
+  #å¼ºçƒˆå»ºè®®å…ˆåˆ é™¤ä¼ä¸šæº
   rm /etc/apt/sources.list.d/pve-enterprise.list
   
   dir="/etc/apt/sources.list.d/"
   file="/etc/apt/sources.list"
 
   if [ -d "$dir" ]; then
-    echo "Deleting directory $dir..."
+    echo "æ­£åœ¨åˆ é™¤ç›®å½• $dir..."
     rm -rf "$dir"
-    echo "Directory deleted."
+    echo "åˆ é™¤å®Œæˆ"
   else
-    echo "Directory $dir does not exist. Skipping deletion."
+    echo "ç›®å½• $dir ä¸å­˜åœ¨ï¼Œè·³è¿‡åˆ é™¤"
   fi
 
-  echo "Replacing content of $file..."
+  echo "æ­£åœ¨æ›¿æ¢ $file ä¸­çš„å†…å®¹..."
 
   echo "deb https://mirrors.ustc.edu.cn/debian/ bookworm main contrib non-free non-free-firmware" > "$file"
   echo "deb https://mirrors.ustc.edu.cn/debian/ bookworm-updates main contrib non-free non-free-firmware" >> "$file"
@@ -68,30 +68,30 @@ function change_source(){
   echo "deb https://mirrors.ustc.edu.cn/debian-security bookworm-security main" >> "$file"
   echo "deb https://mirrors.ustc.edu.cn/proxmox/debian bookworm pve-no-subscription" >> "$file"
 
-  echo "Content replaced."
+  echo "æ›¿æ¢å®Œæˆï¼"
 }
 
-#¿ªÆôintelºËÏÔSR-IOVĞéÄâ»¯Ö±Í¨
+#å¼€å¯intelæ ¸æ˜¾SR-IOVè™šæ‹ŸåŒ–ç›´é€š
 function open_intel_sr_iov(){
-  # »ñÈ¡ PVE °æ±¾ºÅ£¨È¥µôÎŞ¹ØĞÅÏ¢£©
+  # è·å– PVE ç‰ˆæœ¬å·ï¼ˆå»æ‰æ— å…³ä¿¡æ¯ï¼‰
   PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d'-' -f1)
 
-  # ±äÁ¿³õÊ¼»¯
+  # å˜é‡åˆå§‹åŒ–
   LOWER_VERSION=0
 
-  # °æ±¾±È½Ï£¬Èç¹û°æ±¾µÍÓÚ8.3.0ÔòLOWER_VERSION=1
+  # ç‰ˆæœ¬æ¯”è¾ƒï¼Œå¦‚æœç‰ˆæœ¬ä½äº8.3.0åˆ™LOWER_VERSION=1
   if dpkg --compare-versions "$PVE_VERSION" "lt" "8.3.0"; then
     LOWER_VERSION=1
   fi
 
-  # Êä³ö½á¹û
-  echo "µ±Ç° PVE °æ±¾: $PVE_VERSION"
+  # è¾“å‡ºç»“æœ
+  echo "å½“å‰ PVE ç‰ˆæœ¬: $PVE_VERSION"
   if [ "$LOWER_VERSION" -eq 1 ]; then
-    echo "µ±Ç°°æ±¾µÍÓÚ8.3.0"
+    echo "å½“å‰ç‰ˆæœ¬ä½äº8.3.0"
   fi
-  #Proxmox GRUB ÅäÖÃ£¬Proxmox µÄÄ¬ÈÏ°²×°Ê¹ÓÃ GRUB Òıµ¼¼ÓÔØ³ÌĞò
-  #×¢Òâ£ºÓÉÓÚÎÒÊ¹ÓÃµÄÊÇPVE8.3£¬ÏµÍ³Ä¬ÈÏ¿ªÆôÁËiommu,Òò´Ë"quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3"ÖĞÊ¡È¥ÁËintel_iommu=on£¬
-  #µÍ°æ±¾Ê¹ÓÃ"quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"
+  #Proxmox GRUB é…ç½®ï¼ŒProxmox çš„é»˜è®¤å®‰è£…ä½¿ç”¨ GRUB å¼•å¯¼åŠ è½½ç¨‹åº
+  #æ³¨æ„ï¼šç”±äºæˆ‘ä½¿ç”¨çš„æ˜¯PVE8.3ï¼Œç³»ç»Ÿé»˜è®¤å¼€å¯äº†iommu,å› æ­¤"quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3"ä¸­çœå»äº†intel_iommu=onï¼Œ
+  #ä½ç‰ˆæœ¬ä½¿ç”¨"quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"
   cp -a /etc/default/grub{,.bak}
   if [ "$LOWER_VERSION" -eq 1 ]; then
     sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
@@ -99,13 +99,13 @@ function open_intel_sr_iov(){
     sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
   fi
   
-  #¼ÓÔØÄÚºËÄ£¿é:
+  #åŠ è½½å†…æ ¸æ¨¡å—:
   echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" >> /etc/modules
-  #Ó¦ÓÃĞŞ¸Ä
+  #åº”ç”¨ä¿®æ”¹
   update-grub
   update-initramfs -u -k all
 
-  #¿ËÂ¡ DKMS repo ²¢×öÒ»Ğ©¹¹½¨¹¤×÷
+  #å…‹éš† DKMS repo å¹¶åšä¸€äº›æ„å»ºå·¥ä½œ
   apt update && apt install git sysfsutils pve-headers mokutil -y
   rm -rf /usr/src/i915-sriov-dkms-*
   rm -rf /var/lib/dkms/i915-sriov-dkms
@@ -118,108 +118,108 @@ function open_intel_sr_iov(){
   cd ~/i915-sriov-dkms
   dkms add .
 
-  #¹¹½¨ĞÂÄÚºË²¢¼ì²é×´Ì¬¡£ÑéÖ¤ËüÊÇ·ñÏÔÊ¾ÒÑ°²×°
+  #æ„å»ºæ–°å†…æ ¸å¹¶æ£€æŸ¥çŠ¶æ€ã€‚éªŒè¯å®ƒæ˜¯å¦æ˜¾ç¤ºå·²å®‰è£…
   VERSION=$(dkms status -m i915-sriov-dkms | cut -d':' -f1)
   dkms install -m $VERSION --force
   dkms status
 
-  #¶ÔÓÚÈ«ĞÂ°²×°µÄ Proxmox 8.1 ¼°¸ü¸ß°æ±¾£¬¿ÉÒÔÆôÓÃ°²È«Æô¶¯¡£ÒÔ·ÀÍòÒ»£¬ÎÒÃÇĞèÒª¼ÓÔØ DKMS ÃÜÔ¿£¬ÒÔ±ãÄÚºË¼ÓÔØÄ£¿é¡£
-  #ÔËĞĞÒÔÏÂÃüÁî£¬È»ºóÊäÈëÃÜÂë¡£´ËÃÜÂë½öÓÃÓÚ MOK ÉèÖÃ£¬ÖØĞÂÆô¶¯Ö÷»úÊ±½«ÔÙ´ÎÊ¹ÓÃ¡£´Ëºó£¬²»ĞèÒªÃÜÂë¡£
-  #Ëü²»ĞèÒªÓëÄúÓÃÓÚ root ÕÊ»§µÄÃÜÂëÏàÍ¬¡£
+  #å¯¹äºå…¨æ–°å®‰è£…çš„ Proxmox 8.1 åŠæ›´é«˜ç‰ˆæœ¬ï¼Œå¯ä»¥å¯ç”¨å®‰å…¨å¯åŠ¨ã€‚ä»¥é˜²ä¸‡ä¸€ï¼Œæˆ‘ä»¬éœ€è¦åŠ è½½ DKMS å¯†é’¥ï¼Œä»¥ä¾¿å†…æ ¸åŠ è½½æ¨¡å—ã€‚
+  #è¿è¡Œä»¥ä¸‹å‘½ä»¤ï¼Œç„¶åè¾“å…¥å¯†ç ã€‚æ­¤å¯†ç ä»…ç”¨äº MOK è®¾ç½®ï¼Œé‡æ–°å¯åŠ¨ä¸»æœºæ—¶å°†å†æ¬¡ä½¿ç”¨ã€‚æ­¤åï¼Œä¸éœ€è¦å¯†ç ã€‚
+  #å®ƒä¸éœ€è¦ä¸æ‚¨ç”¨äº root å¸æˆ·çš„å¯†ç ç›¸åŒã€‚
   mokutil --import /var/lib/dkms/mok.pub
 
-  #Íê³É PCI ÅäÖÃ
-  #1. ÏÖÔÚÎÒÃÇĞèÒªÕÒµ½ VGA ¿¨Î»ÓÚÄÄ¸ö PCIe ×ÜÏßÉÏ¡£Í¨³£VGA×ÜÏßIDÎª00:02.0
-  # »ñÈ¡ VGA Éè±¸µÄ PCIe ×ÜÏßºÅ
+  #å®Œæˆ PCI é…ç½®
+  #1. ç°åœ¨æˆ‘ä»¬éœ€è¦æ‰¾åˆ° VGA å¡ä½äºå“ªä¸ª PCIe æ€»çº¿ä¸Šã€‚é€šå¸¸VGAæ€»çº¿IDä¸º00:02.0
+  # è·å– VGA è®¾å¤‡çš„ PCIe æ€»çº¿å·
   vga_id=$(lspci | grep VGA | awk '{print $1}')
 
-  # È·±£³É¹¦»ñÈ¡ vga_id
+  # ç¡®ä¿æˆåŠŸè·å– vga_id
   if [ -z "$vga_id" ]; then
-    echo "Î´ÕÒµ½ VGA Éè±¸£¬Çë¼ì²é lspci Êä³ö£¡"
+    echo "æœªæ‰¾åˆ° VGA è®¾å¤‡ï¼Œè¯·æ£€æŸ¥ lspci è¾“å‡ºï¼"
     exit 1
   fi
 
-  #2. Éú³É sysfs ÅäÖÃ
+  #2. ç”Ÿæˆ sysfs é…ç½®
   echo "devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3" > /etc/sysfs.conf
 
-  # Êä³ö½á¹û
-  echo "ÒÑĞ´Èë /etc/sysfs.conf£¬ÄÚÈİÈçÏÂ£º"
-  #cat¸ÃÎÄ¼ş²¢È·±£ËüÒÑ±»ĞŞ¸Ä
+  # è¾“å‡ºç»“æœ
+  echo "å·²å†™å…¥ /etc/sysfs.confï¼Œå†…å®¹å¦‚ä¸‹ï¼š"
+  #catè¯¥æ–‡ä»¶å¹¶ç¡®ä¿å®ƒå·²è¢«ä¿®æ”¹
   cat /etc/sysfs.conf
 
-  #3. ÖØÆô Proxmox Ö÷»ú¡£Èç¹ûÊ¹ÓÃ Proxmox 8.1 »ò¸ü¸ß°æ±¾²¢ÆôÓÃ°²È«Æô¶¯£¬Ôò±ØĞëÉèÖÃ MOK¡£
-  #ÔÚ Proxmox Ö÷»úÖØÆôÊ±£¬¼à¿ØÆô¶¯¹ı³Ì²¢µÈ´ıÖ´ĞĞ MOK ¹ÜÀí´°¿Ú£¨ÏÂÃæµÄÆÁÄ»½ØÍ¼£©¡£
-  #Èç¹û´í¹ıÁËµÚÒ»´ÎÖØÆô£¬ÔòĞèÒªÖØĞÂÔËĞĞ mokutil ÃüÁî²¢ÔÙ´ÎÖØÆô¡£DKMS Ä£¿é½«²»»á¼ÓÔØ£¬Ö±µ½ÄúÍê³É´ËÉèÖÃ
-  #ÔÚPVEÖØÆôÊ±µÄÏÔÊ¾Æ÷Æô¶¯½çÃæÒÀ´ÎÑ¡ÔñEnroll MOK--->Continue--->Yes--->password(ÊäÈëÖ®Ç°ÉèÖÃµÄMOKÃÜÂë»Ø³µ)--->Reboot
-  #Ó²¼şÀïÃæÌí¼ÓPCIÉè±¸¿ÉÑ¡ÔñĞéÄâ³öÀ´µÄ¼¸¸öSR-IOVºËÏÔ£¬×¢ÒâÒª¼ÇµÃ¹´Ñ¡Ö÷GPUºÍPCI-Express£¬ÏÔÊ¾ÉèÖÃÎªVirtlO-GPU£¬ÕâÑù¿ØÖÆÌ¨²ÅÓĞ»­Ãæ
+  #3. é‡å¯ Proxmox ä¸»æœºã€‚å¦‚æœä½¿ç”¨ Proxmox 8.1 æˆ–æ›´é«˜ç‰ˆæœ¬å¹¶å¯ç”¨å®‰å…¨å¯åŠ¨ï¼Œåˆ™å¿…é¡»è®¾ç½® MOKã€‚
+  #åœ¨ Proxmox ä¸»æœºé‡å¯æ—¶ï¼Œç›‘æ§å¯åŠ¨è¿‡ç¨‹å¹¶ç­‰å¾…æ‰§è¡Œ MOK ç®¡ç†çª—å£ï¼ˆä¸‹é¢çš„å±å¹•æˆªå›¾ï¼‰ã€‚
+  #å¦‚æœé”™è¿‡äº†ç¬¬ä¸€æ¬¡é‡å¯ï¼Œåˆ™éœ€è¦é‡æ–°è¿è¡Œ mokutil å‘½ä»¤å¹¶å†æ¬¡é‡å¯ã€‚DKMS æ¨¡å—å°†ä¸ä¼šåŠ è½½ï¼Œç›´åˆ°æ‚¨å®Œæˆæ­¤è®¾ç½®
+  #åœ¨PVEé‡å¯æ—¶çš„æ˜¾ç¤ºå™¨å¯åŠ¨ç•Œé¢ä¾æ¬¡é€‰æ‹©Enroll MOK--->Continue--->Yes--->password(è¾“å…¥ä¹‹å‰è®¾ç½®çš„MOKå¯†ç å›è½¦)--->Reboot
+  #ç¡¬ä»¶é‡Œé¢æ·»åŠ PCIè®¾å¤‡å¯é€‰æ‹©è™šæ‹Ÿå‡ºæ¥çš„å‡ ä¸ªSR-IOVæ ¸æ˜¾ï¼Œæ³¨æ„è¦è®°å¾—å‹¾é€‰ä¸»GPUå’ŒPCI-Expressï¼Œæ˜¾ç¤ºè®¾ç½®ä¸ºVirtlO-GPUï¼Œè¿™æ ·æ§åˆ¶å°æ‰æœ‰ç”»é¢
   
-  # Ñ¯ÎÊÓÃ»§ÊÇ·ñÖØÆô
-  read -p "ÒÑÉèÖÃÍê±Ï£¬ÊÇ·ñÖØÆôÏµÍ³£¿ÇëÊäÈë [Y/n]: " choice
+  # è¯¢é—®ç”¨æˆ·æ˜¯å¦é‡å¯
+  read -p "å·²è®¾ç½®å®Œæ¯•ï¼Œæ˜¯å¦é‡å¯ç³»ç»Ÿï¼Ÿè¯·è¾“å…¥ [Y/n]: " choice
   [ -z "${choice}" ] && choice="y"
 
-  # ÅĞ¶ÏÓÃ»§ÊäÈë
+  # åˆ¤æ–­ç”¨æˆ·è¾“å…¥
   if [[ $choice == [Yy] ]]; then
-    echo "ÏµÍ³½«ÔÚ 2 ÃëºóÖØÆô..."
+    echo "ç³»ç»Ÿå°†åœ¨ 2 ç§’åé‡å¯..."
     sleep 2
     reboot
   else
-    echo "ÒÑÈ¡Ïû£¬ÇëÉÔºó×ÔĞĞÖØÆô¡£"
+    echo "å·²å–æ¶ˆï¼Œè¯·ç¨åè‡ªè¡Œé‡å¯ã€‚"
   fi
 }
 
-#¿ªÊ¼²Ëµ¥
+#å¼€å§‹èœå•
 start_menu(){
   clear
   green " ======================================="
-  green " ½éÉÜ£º"
-  green " Ò»¼üÅäÖÃPVEÏµÍ³×ÛºÏ½Å±¾"
-  red " *½ö¹©¼¼Êõ½»Á÷Ê¹ÓÃ£¬±¾½Å±¾¿ªÔ´£¬ÇëÎğÓÃÓÚÉÌÒµÓÃÍ¾£¡ÈçÓĞĞŞ¸ÄĞÂÔöÒ²ĞĞ²»Áß¿ªÔ´£¡"
+  green " ä»‹ç»ï¼š"
+  green " ä¸€é”®é…ç½®PVEç³»ç»Ÿç»¼åˆè„šæœ¬"
+  red " *ä»…ä¾›æŠ€æœ¯äº¤æµä½¿ç”¨ï¼Œæœ¬è„šæœ¬å¼€æºï¼Œè¯·å‹¿ç”¨äºå•†ä¸šç”¨é€”ï¼å¦‚æœ‰ä¿®æ”¹æ–°å¢ä¹Ÿè¡Œä¸åå¼€æºï¼"
   green " ======================================="
   echo
-  green " 1. ÉèÖÃwebµÇÂ¼Ò³Ä¬ÈÏÓïÑÔÎª¼òÌåÖĞÎÄ"
-  green " 2. É¾³ılocal_lvm"
-  green " 3. ¸üĞÂpveÏµÍ³"
-  green " 4. È¡ÏûÎŞĞ§¶©ÔÄµ¯´°"
-  green " 5. PVEÈí¼şÔ´¸ü»»"
-  green " 6. ¿ªÆôintelºËÏÔSR-IOVĞéÄâ»¯Ö±Í¨"
-  blue " 0. ÍË³ö½Å±¾"
+  green " 1. è®¾ç½®webç™»å½•é¡µé»˜è®¤è¯­è¨€ä¸ºç®€ä½“ä¸­æ–‡"
+  green " 2. åˆ é™¤local_lvm"
+  green " 3. æ›´æ–°pveç³»ç»Ÿ"
+  green " 4. å–æ¶ˆæ— æ•ˆè®¢é˜…å¼¹çª—"
+  green " 5. PVEè½¯ä»¶æºæ›´æ¢"
+  green " 6. å¼€å¯intelæ ¸æ˜¾SR-IOVè™šæ‹ŸåŒ–ç›´é€š"
+  blue " 0. é€€å‡ºè„šæœ¬"
   echo
-  read -p "ÇëÊäÈëÊı×Ö:" num
+  read -p "è¯·è¾“å…¥æ•°å­—:" num
   case "$num" in
   1)
   set_default_language_zh_CN
   sleep 1s
-  read -s -n1 -p "°´ÈÎÒâ¼ü·µ»Ø²Ëµ¥ ... "
+  read -s -n1 -p "æŒ‰ä»»æ„é”®è¿”å›èœå• ... "
   start_menu
   ;;
   2)
   delete_local_lvm
   sleep 1s
-  read -s -n1 -p "°´ÈÎÒâ¼ü·µ»Ø²Ëµ¥ ... "
+  read -s -n1 -p "æŒ‰ä»»æ„é”®è¿”å›èœå• ... "
   start_menu
   ;;
   3)
   update_pve
   sleep 1s
-  read -s -n1 -p "°´ÈÎÒâ¼ü·µ»Ø²Ëµ¥ ... "
+  read -s -n1 -p "æŒ‰ä»»æ„é”®è¿”å›èœå• ... "
   start_menu
   ;;
   4)
   delete_invalid_subscription_popup
   sleep 1s
-  read -s -n1 -p "°´ÈÎÒâ¼ü·µ»ØÉÏ¼¶²Ëµ¥ ... "
+  read -s -n1 -p "æŒ‰ä»»æ„é”®è¿”å›ä¸Šçº§èœå• ... "
   start_menu
   ;;
   5)
   change_source
   sleep 1s
-  read -s -n1 -p "°´ÈÎÒâ¼ü·µ»Ø²Ëµ¥ ... "
+  read -s -n1 -p "æŒ‰ä»»æ„é”®è¿”å›èœå• ... "
   start_menu
   ;;
   6)
   open_intel_sr_iov
   sleep 1s
-  read -s -n1 -p "°´ÈÎÒâ¼ü·µ»ØÉÏ¼¶²Ëµ¥ ... "
+  read -s -n1 -p "æŒ‰ä»»æ„é”®è¿”å›ä¸Šçº§èœå• ... "
   start_menu
   ;;
   0)
@@ -227,7 +227,7 @@ start_menu(){
   ;;
   *)
   clear
-  red "ÇëÊäÈëÕıÈ·Êı×Ö"
+  red "è¯·è¾“å…¥æ­£ç¡®æ•°å­—"
   sleep 1s
   start_menu
   ;;
