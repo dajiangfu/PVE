@@ -32,7 +32,6 @@ function update_pve(){
   #检查你的sources.list文件，建议尽可能使用官方源不是替换的第三方源，如网络实在连不上官方源则使用第三方源
   #更新存储库和包，如果出现任何错误，则表示您的sources.list（或您的网络或订阅密钥状态）存在问题
   apt update
-
   #升级软件包
   apt dist-upgrade
 }
@@ -41,7 +40,7 @@ function update_pve(){
 function delete_invalid_subscription_popup(){
   sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
   systemctl restart pveproxy.service
-  # 执行完成后，浏览器Ctrl+F5强制刷新缓存
+  #执行完成后，浏览器Ctrl+F5强制刷新缓存
 }
 
 #PVE软件源更换
@@ -73,38 +72,6 @@ function change_source(){
 
 #开启intel核显SR-IOV虚拟化直通
 function open_intel_sr_iov(){
-  # 获取 PVE 版本号（去掉无关信息）
-  PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d'-' -f1)
-
-  # 变量初始化
-  LOWER_VERSION=0
-
-  # 版本比较，如果版本低于8.3.0则LOWER_VERSION=1
-  if dpkg --compare-versions "$PVE_VERSION" "lt" "8.3.0"; then
-    LOWER_VERSION=1
-  fi
-
-  # 输出结果
-  echo "当前 PVE 版本: $PVE_VERSION"
-  if [ "$LOWER_VERSION" -eq 1 ]; then
-    echo "当前版本低于8.3.0"
-  fi
-  #Proxmox GRUB 配置，Proxmox 的默认安装使用 GRUB 引导加载程序
-  #注意：由于我使用的是PVE8.3，系统默认开启了iommu,因此"quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3"中省去了intel_iommu=on，
-  #低版本使用"quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"
-  cp -a /etc/default/grub{,.bak}
-  if [ "$LOWER_VERSION" -eq 1 ]; then
-    sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
-  else
-    sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
-  fi
-  
-  #加载内核模块:
-  echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" >> /etc/modules
-  #应用修改
-  update-grub
-  update-initramfs -u -k all
-
   #克隆 DKMS repo 并做一些构建工作
   apt update && apt install git sysfsutils pve-headers mokutil -y
   rm -rf /usr/src/i915-sriov-dkms-*
@@ -121,43 +88,77 @@ function open_intel_sr_iov(){
   #构建新内核并检查状态。验证它是否显示已安装
   VERSION=$(dkms status -m i915-sriov-dkms | cut -d':' -f1)
   dkms install -m $VERSION --force
-  dkms status
+  #运行 dkms status 并检查i915-sriov-dkms是否已安装"
+  if ! dkms status | grep -qi "i915-sriov-dkms.*installed"; then
+    echo "i915-sriov-dkms未安装，退出脚本！"
+    exit 1
+  fi
+  echo "i915-sriov-dkms已安装，继续..."
 
   #对于全新安装的 Proxmox 8.1 及更高版本，可以启用安全启动。以防万一，我们需要加载 DKMS 密钥，以便内核加载模块。
   #运行以下命令，然后输入密码。此密码仅用于 MOK 设置，重新启动主机时将再次使用。此后，不需要密码。
   #它不需要与您用于 root 帐户的密码相同。
   mokutil --import /var/lib/dkms/mok.pub
+  
+  #获取 PVE 版本号（去掉无关信息）
+  PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d'-' -f1)
+  #变量初始化
+  LOWER_VERSION=0
+  #版本比较，如果版本低于8.3.0则LOWER_VERSION=1
+  if dpkg --compare-versions "$PVE_VERSION" "lt" "8.3.0"; then
+    LOWER_VERSION=1
+  fi
+  #输出结果
+  echo "当前 PVE 版本: $PVE_VERSION"
+  if [ "$LOWER_VERSION" -eq 1 ]; then
+    echo "当前版本低于8.3.0"
+  fi
+  
+  #Proxmox GRUB 配置，Proxmox 的默认安装使用 GRUB 引导加载程序
+  #注意：由于我使用的是PVE8.3，系统默认开启了iommu,因此"quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3"中省去了intel_iommu=on，
+  #低版本使用"quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"
+  cp -a /etc/default/grub{,.bak}
+  if [ "$LOWER_VERSION" -eq 1 ]; then
+    sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
+  else
+    sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
+  fi
+  
+  #加载内核模块:
+  echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" >> /etc/modules
+  #应用修改
+  update-grub
+  update-initramfs -u -k all
 
   #完成 PCI 配置
-  #1. 现在我们需要找到 VGA 卡位于哪个 PCIe 总线上。通常VGA总线ID为00:02.0
-  # 获取 VGA 设备的 PCIe 总线号
+  #现在我们需要找到 VGA 卡位于哪个 PCIe 总线上。通常VGA总线ID为00:02.0
+  #获取 VGA 设备的 PCIe 总线号
   vga_id=$(lspci | grep VGA | awk '{print $1}')
 
-  # 确保成功获取 vga_id
+  #确保成功获取 vga_id
   if [ -z "$vga_id" ]; then
     echo "未找到 VGA 设备，请检查 lspci 输出！"
     exit 1
   fi
 
-  #2. 生成 sysfs 配置
+  #生成 sysfs 配置
   echo "devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3" > /etc/sysfs.conf
 
-  # 输出结果
+  #输出结果
   echo "已写入 /etc/sysfs.conf，内容如下："
   #cat该文件并确保它已被修改
   cat /etc/sysfs.conf
-
-  #3. 重启 Proxmox 主机。如果使用 Proxmox 8.1 或更高版本并启用安全启动，则必须设置 MOK。
+  
+  #询问用户是否重启
+  #重启 Proxmox 主机。如果使用 Proxmox 8.1 或更高版本并启用安全启动，则必须设置 MOK。
   #在 Proxmox 主机重启时，监控启动过程并等待执行 MOK 管理窗口（下面的屏幕截图）。
   #如果错过了第一次重启，则需要重新运行 mokutil 命令并再次重启。DKMS 模块将不会加载，直到您完成此设置
   #在PVE重启时的显示器启动界面依次选择Enroll MOK--->Continue--->Yes--->password(输入之前设置的MOK密码回车)--->Reboot
   #硬件里面添加PCI设备可选择虚拟出来的几个SR-IOV核显，注意要记得勾选主GPU和PCI-Express，显示设置为VirtlO-GPU，这样控制台才有画面
-  
-  # 询问用户是否重启
   read -p "已设置完毕，是否重启系统？请输入 [Y/n]: " choice
   [ -z "${choice}" ] && choice="y"
 
-  # 判断用户输入
+  #判断用户输入
   if [[ $choice == [Yy] ]]; then
     echo "系统将在 2 秒后重启..."
     sleep 2
