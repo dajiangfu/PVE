@@ -38,7 +38,7 @@ function update_pve(){
 }
 
 #取消无效订阅弹窗
-function ()delete_invalid_subscription_popup{
+function delete_invalid_subscription_popup(){
   sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
   systemctl restart pveproxy.service
   # 执行完成后，浏览器Ctrl+F5强制刷新缓存
