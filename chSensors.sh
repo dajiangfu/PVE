@@ -86,7 +86,7 @@ EOF
                  f0 = d['CPU-MHz'];
                  f1 = d['CPU-min-MHz'];
                  f2 = d['CPU-max-MHz'];
-                 return  \`CPU实时(Cur): \${f0} MHz | 最小(min): \${f1} MHz | 最大(max): \${f2} MHz \`;
+                 return  \`CPU实时: \${f0} MHz | 最小: \${f1} MHz | 最大: \${f2} MHz \`;
          }
  }
 EOF
@@ -159,7 +159,7 @@ EOF
                  f0 = d['CPU-MHz'];
                  f1 = d['CPU-min-MHz'];
                  f2 = d['CPU-max-MHz'];
-                 return  \`CPU实时(Cur): \${f0} MHz | 最小(min): \${f1} MHz | 最大(max): \${f2} MHz \`;
+                 return  \`CPU实时: \${f0} MHz | 最小: \${f1} MHz | 最大: \${f2} MHz \`;
          }
  }
 EOF
