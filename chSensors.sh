@@ -248,19 +248,20 @@ EOF
           fi
           apt-get -y remove lm-sensors
           {
-          #mv $js.backup $js
-          #mv $pm.backup $pm
-          #rm $js
-          #rm $pm
-          rm /usr/bin/s.sh
-          #cp /etc/pvetools/pvemanagerlib.js $js
-          #cp /etc/pvetools/Nodes.pm $pm
-          apt install --reinstall pve-manager
-          systemctl restart pveproxy
-          echo 50
-          echo 100
-          sleep 1
-          }|whiptail --gauge "Uninstalling" 10 60 0
+            #mv $js.backup $js
+            #mv $pm.backup $pm
+            #rm $js
+            #rm $pm
+            rm /usr/bin/s.sh
+            #cp /etc/pvetools/pvemanagerlib.js $js
+            #cp /etc/pvetools/Nodes.pm $pm
+            apt-get install --reinstall pve-manager
+            systemctl restart pveproxy
+            echo 50
+            sleep 1
+            echo 100
+            sleep 1
+          } | whiptail --gauge "正在卸载" 10 60 0
           whiptail --title "Success" --msgbox "卸载成功。" 10 60
         fi
       fi
