@@ -9,10 +9,17 @@ function green(){
 function red(){
   echo -e "\033[31m\033[01m$1\033[0m"
 }
+function yellow(){
+  echo -e "\033[33m\033[01m$1\033[0m"
+}
 
 #设置web登录页默认语言为简体中文
 function set_default_language_zh_CN(){
-  echo 'language: zh_CN' >>/etc/pve/datacenter.cfg
+  if grep -q "^language:" /etc/pve/datacenter.cfg; then
+    sed -i 's/^language:.*/language: zh_CN/' /etc/pve/datacenter.cfg
+  else
+    echo 'language: zh_CN' >> /etc/pve/datacenter.cfg
+  fi
   #重启服务
   systemctl restart pvedaemon.service
 }
@@ -21,42 +28,65 @@ function set_default_language_zh_CN(){
 #PVE安装好后的第一件事就是删除local-lvm分区
 #PVE系统在安装的时候默认会把储存划分为local和local-lvm两个块，在实际使用的时候往往其中一个不够用了另一个还很空的情况，可以删除local-lvm的空间，然后把全部分配给local，方便自己管理
 function delete_local_lvm(){
-  lvremove pve/data
-  lvextend -l +100%FREE -r pve/root
-  #完成命令后需要手动进入到pve的webui操作，数据中心--存储--local-lvm--移除，这样就删掉了local-lvm的空间。
-  #数据中心--存储--local-编辑，在内容这里，把所有的选项都选上，然后在PVE节点的概要里看下硬盘空间，可以看到空间被完整的利用了
+  if lvremove -y pve/data; then
+    green "已删除 local-lvm"
+  else
+    red "lvremove 失败，请检查 LVM 配置！"
+  fi
+  if lvextend -l +100%FREE -r pve/root; then
+    green "已成功扩展 root 分区"
+    green "1、请进入到pve的webui"
+    green "2、执行 数据中心--存储--local-lvm--移除，这样就删掉了local-lvm的空间"
+    green "3、执行 数据中心--存储--local-编辑，在内容这里，把所有的选项都选上，然后在PVE节点的概要里看下硬盘空间，可以看到空间被完整的利用了"
+  else
+    red "lvextend 扩展失败，请检查存储空间是否足够！"
+  fi
 }
 
 #更新pve系统
 function update_pve(){
   #检查你的sources.list文件，建议尽可能使用官方源不是替换的第三方源，如网络实在连不上官方源则使用第三方源
-  #更新存储库和包，如果出现任何错误，则表示您的sources.list（或您的网络或订阅密钥状态）存在问题
-  apt update
-  #升级软件包
-  apt dist-upgrade
+  if ! apt update; then
+    red "存储库更新失败，请检查网络或 sources.list 配置或订阅密钥状态！"
+    return 1
+  fi
+
+  green "升级软件包..."
+  if ! apt dist-upgrade -y; then
+    red "软件包升级失败，请检查错误日志！"
+    return 1
+  fi
 }
 
 #取消无效订阅弹窗
 function delete_invalid_subscription_popup(){
   sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
   systemctl restart pveproxy.service
-  #执行完成后，浏览器Ctrl+F5强制刷新缓存
+  green "执行完成后，浏览器Ctrl+F5强制刷新缓存"
 }
 
 #PVE软件源更换
 function change_source(){
   #强烈建议先删除企业源
-  rm /etc/apt/sources.list.d/pve-enterprise.list
+  if [ -f "/etc/apt/sources.list.d/pve-enterprise.list" ]; then
+    rm -f /etc/apt/sources.list.d/pve-enterprise.list
+    green "已删除 pve-enterprise.list"
+  else
+    yellow "pve-enterprise.list 不存在，跳过删除"
+  fi
   
   dir="/etc/apt/sources.list.d/"
   file="/etc/apt/sources.list"
 
   if [ -d "$dir" ]; then
     echo "正在删除目录 $dir..."
-    rm -rf "$dir"
-    echo "删除完成"
+    if rm -rf "$dir"; then
+        green "删除完成"
+    else
+        red "删除失败"
+    fi
   else
-    echo "目录 $dir 不存在，跳过删除"
+    yellow "目录 $dir 不存在，跳过删除"
   fi
 
   echo "正在替换 $file 中的内容..."
@@ -67,11 +97,11 @@ function change_source(){
   echo "deb https://mirrors.ustc.edu.cn/debian-security bookworm-security main" >> "$file"
   echo "deb https://mirrors.ustc.edu.cn/proxmox/debian bookworm pve-no-subscription" >> "$file"
 
-  echo "替换完成！"
+  green "替换完成！"
 }
 
 #开启intel核显SR-IOV虚拟化直通
-function open_intel_sr_iov(){
+function install_intel_sr_iov_dkms(){
   #克隆 DKMS repo 并做一些构建工作
   apt update && apt install git sysfsutils pve-headers mokutil -y
   rm -rf /usr/src/i915-sriov-dkms-*
@@ -81,37 +111,54 @@ function open_intel_sr_iov(){
 
   cd ~
   git clone https://github.com/strongtz/i915-sriov-dkms.git
-  apt install build-* dkms
+  #apt install build-* dkms
+  #build-* 是 通配符匹配，它会安装所有以 build- 开头的包，这可能包括大量不必要的软件。
+  #build-* 并不是一个官方推荐的安装方式，它可能会匹配到 大量不相关的软件
+  #不推荐 直接使用 build-*，因为它可能会安装许多你 不需要的构建工具，导致系统安装冗余包
+  #不建议使用 build-*，可能会安装不相关的包，占用磁盘空间并影响系统稳定性
+  apt install build-essential dkms -y
   cd ~/i915-sriov-dkms
-  dkms add .
+  if ! dkms add .; then
+    red "DKMS 添加失败，退出！"
+    return 1
+  fi
 
   #构建新内核并检查状态。验证它是否显示已安装
   VERSION=$(dkms status -m i915-sriov-dkms | cut -d':' -f1)
-  dkms install -m $VERSION --force
-  #运行 dkms status 并检查i915-sriov-dkms是否已安装"
-  if ! dkms status | grep -qi "i915-sriov-dkms.*installed"; then
-    echo "i915-sriov-dkms未安装，退出脚本！"
-    exit 1
+  if [ -z "$VERSION" ]; then
+    red "无法获取 i915-sriov-dkms 版本，退出！"
+    return 1
   fi
-  echo "i915-sriov-dkms已安装，继续..."
+  if ! dkms install -m "$VERSION" --force; then
+    red "DKMS 安装失败！请检查以下内容："
+    red "1. 是否已安装 build-essential 和 dkms"
+    red "2. 是否有足够的磁盘空间"
+    red "3. 运行 dkms status 确保模块被正确识别"
+    return 1
+  fi
+  #运行 dkms status 并检查i915-sriov-dkms是否已安装"
+  if dkms status -m i915-sriov-dkms | grep -iqE ":\s+installed$"; then
+    green "i915-sriov-dkms已安装，继续..."
+  else
+    red "i915-sriov-dkms未安装，退出！"
+    return 1
+  fi
 
   #对于全新安装的 Proxmox 8.1 及更高版本，可以启用安全启动。以防万一，我们需要加载 DKMS 密钥，以便内核加载模块。
   #运行以下命令，然后输入密码。此密码仅用于 MOK 设置，重新启动主机时将再次使用。此后，不需要密码。
   #它不需要与您用于 root 帐户的密码相同。
+  green "加载 DKMS 密钥"
   mokutil --import /var/lib/dkms/mok.pub
   
   #获取 PVE 版本号（去掉无关信息）
-  PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d'-' -f1)
-  #变量初始化
   LOWER_VERSION=0
-  #版本比较，如果版本低于8.3.0则LOWER_VERSION=1
-  if dpkg --compare-versions "$PVE_VERSION" "lt" "8.3.0"; then
-    LOWER_VERSION=1
-  fi
-  #输出结果
+  #PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d' ' -f1 | cut -d'-' -f1)#此命令也可用，但较冗长
+  PVE_VERSION=$(pveversion | cut -d'/' -f2 | cut -d'-' -f1)
   echo "当前 PVE 版本: $PVE_VERSION"
-  if [ "$LOWER_VERSION" -eq 1 ]; then
-    echo "当前版本低于8.3.0"
+  #版本比较，判断是否版本低于8.3.0
+  if dpkg --compare-versions "$PVE_VERSION" "lt" "8.3.0"; then
+    blue "当前版本低于8.3.0"
+    LOWER_VERSION=1
   fi
   
   #Proxmox GRUB 配置，Proxmox 的默认安装使用 GRUB 引导加载程序
@@ -119,9 +166,9 @@ function open_intel_sr_iov(){
   #低版本使用"quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"
   cp -a /etc/default/grub{,.bak}
   if [ "$LOWER_VERSION" -eq 1 ]; then
-    sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
+    sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
   else
-    sudo sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
+    sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3"' /etc/default/grub
   fi
   
   #加载内核模块:
@@ -137,8 +184,8 @@ function open_intel_sr_iov(){
 
   #确保成功获取 vga_id
   if [ -z "$vga_id" ]; then
-    echo "未找到 VGA 设备，请检查 lspci 输出！"
-    exit 1
+    red "未找到 VGA 设备，请检查 lspci 输出！"
+    return 1
   fi
 
   #生成 sysfs 配置
@@ -156,15 +203,14 @@ function open_intel_sr_iov(){
   #在PVE重启时的显示器启动界面依次选择Enroll MOK--->Continue--->Yes--->password(输入之前设置的MOK密码回车)--->Reboot
   #硬件里面添加PCI设备可选择虚拟出来的几个SR-IOV核显，注意要记得勾选主GPU和PCI-Express，显示设置为VirtlO-GPU，这样控制台才有画面
   read -p "已设置完毕，是否重启系统？请输入 [Y/n]: " choice
+  choice=$(echo "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
   [ -z "${choice}" ] && choice="y"
-
-  #判断用户输入
-  if [[ $choice == [Yy] ]]; then
-    echo "系统将在 2 秒后重启..."
+  if [[ "$choice" == "y" ]]; then
+    green "系统将在 2 秒后重启..."
     sleep 2
     reboot
   else
-    echo "已取消，请稍后自行重启。"
+    blue "已取消，请稍后自行重启。"
   fi
 }
 
@@ -218,13 +264,13 @@ start_menu(){
   start_menu
   ;;
   6)
-  open_intel_sr_iov
+  install_intel_sr_iov_dkms
   sleep 1s
   read -s -n1 -p "按任意键返回上级菜单 ... "
   start_menu
   ;;
   0)
-  exit 1
+  exit 0
   ;;
   *)
   clear
