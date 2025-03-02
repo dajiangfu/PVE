@@ -227,10 +227,7 @@ exitstatus=$?
 if [ $exitstatus = 0 ]; then
     case "$x" in
     a )
-        if(whiptail --title "Yes/No" --yesno "
-Your OS：$pve, you will install sensors interface, continue?(y/n)
-您的系统是：$pve, 您将安装sensors界面，是否继续？(y/n)
-            " 10 60) then
+        if(whiptail --title "Yes/No" --yesno "您的系统是：$pve, 您将安装sensors界面，是否继续？(y/n)" 10 60) then
             js='/usr/share/pve-manager/js/pvemanagerlib.js'
             pm='/usr/share/perl5/PVE/API2/Nodes.pm'
             sh='/usr/bin/s.sh'
@@ -247,28 +244,20 @@ Your OS：$pve, you will install sensors interface, continue?(y/n)
                 cp $pm /etc/pvetools/Nodes.pm
             fi
             if [[ "$OS" != "pve" ]];then
-                whiptail --title "Warnning" --msgbox "
-您的系统不是Proxmox VE, 无法安装!
-                " 10 60
+                whiptail --title "Warnning" --msgbox "您的系统不是Proxmox VE, 无法安装!" 10 60
                 if [[ "$bver" != "5" || "$bver" != "6" || "$bver" != "7" ]];then
-                    whiptail --title "Warnning" --msgbox "
-您的系统版本无法安装!
-                    " 10 60
+                    whiptail --title "Warnning" --msgbox "您的系统版本无法安装!" 10 60
                     start_menu
                 fi
                 start_menu
             fi
             if [[ ! -f "$js" || ! -f "$pm" ]];then
-                whiptail --title "Warnning" --msgbox "
-您的Proxmox VE版本不支持此方式！
-                " 10 60
+                whiptail --title "Warnning" --msgbox "您的Proxmox VE版本不支持此方式！" 10 60
                 start_menu
             fi
             #if [[ -f "$js.backup" && -f "$sh" ]];then
             if [[ `cat $js|grep Sensors|wc -l` -gt 0 ]];then
-                whiptail --title "Warnning" --msgbox "
-您已经安装过本软件，请不要重复安装！
-                " 10 60
+                whiptail --title "Warnning" --msgbox "您已经安装过本软件，请不要重复安装！" 10 60
                 chSensors
             fi
             if [ ! -f "/usr/bin/sensors" ];then
@@ -277,10 +266,7 @@ Your OS：$pve, you will install sensors interface, continue?(y/n)
             sensors-detect --auto > /tmp/sensors
             drivers=`sed -n '/Chip drivers/,/\#----cut here/p' /tmp/sensors|sed '/Chip /d'|sed '/cut/d'`
             if [ `echo $drivers|wc -w` = 0 ];then
-                whiptail --title "Warnning" --msgbox "
-没有找到任何驱动，似乎你的系统没有温度传感器。
-继续配置CPU频率...
-                " 10 60
+                whiptail --title "Warnning" --msgbox "没有找到任何驱动，似乎你的系统没有温度传感器。继续配置CPU频率..." 10 60
                 if [ $bver -gt 7 ];then
                     cat << EOF > /usr/bin/s.sh
 curC=\`cat /proc/cpuinfo|grep MHz|awk 'NR==1{print \$4}'\`
@@ -329,10 +315,7 @@ EOF
             if [ -f ./p1 ];then rm ./p1;fi
             if [ -f ./p2 ];then rm ./p2;fi
             systemctl restart pveproxy
-            whiptail --title "Success" --msgbox "
-如果没有意外，已经安装完成！浏览器打开界面刷新看一下概要界面！
-            " 10 60
-
+            whiptail --title "Success" --msgbox "如果没有意外，已经安装完成！浏览器打开界面刷新看一下概要界面！" 10 60
                 chSensors
             else
                 for i in $drivers
@@ -344,9 +327,7 @@ EOF
                 done
                 sensors
                 sleep 3
-                whiptail --title "Success" --msgbox "
-安装配置成功，如果没有意外，上面已经显示sensors。下一步会重启web界面，请不要惊慌。
-                " 20 60
+                whiptail --title "Success" --msgbox "安装配置成功，如果没有意外，上面已经显示sensors。下一步会重启web界面，请不要惊慌。" 20 60
             rm /tmp/sensors
             #debian 12 fixbug
             if [ $bver -gt 7 ];then
@@ -445,25 +426,19 @@ EOF
             if [ -f ./p1 ];then rm ./p1;fi
             if [ -f ./p2 ];then rm ./p2;fi
             systemctl restart pveproxy
-            whiptail --title "Success" --msgbox "
-如果没有意外，已经安装完成！浏览器打开界面刷新看一下概要界面！
-            " 10 60
+            whiptail --title "Success" --msgbox "如果没有意外，已经安装完成！浏览器打开界面刷新看一下概要界面！" 10 60
         fi
         else
             chSensors
         fi
     ;;
     b )
-        if(whiptail --title "Yes/No" --yesno "
-确认要还原配置？
-        " 10 60)then
+        if(whiptail --title "Yes/No" --yesno "确认要还原配置？" 10 60)then
             js='/usr/share/pve-manager/js/pvemanagerlib.js'
             pm='/usr/share/perl5/PVE/API2/Nodes.pm'
 
             if [[ `cat $js|grep -E 'Sensors|CPU'|wc -l` = 0 ]];then
-                whiptail --title "Warnning" --msgbox "
-没有检测到安装，不需要卸载。
-                " 10 60
+                whiptail --title "Warnning" --msgbox "没有检测到安装，不需要卸载。" 10 60
             else
                 sensors-detect --auto > /tmp/sensors
                 drivers=`sed -n '/Chip drivers/,/\#----cut here/p' /tmp/sensors|sed '/Chip /d'|sed '/cut/d'`
@@ -490,9 +465,7 @@ EOF
                 echo 100
                 sleep 1
             }|whiptail --gauge "Uninstalling" 10 60 0
-            whiptail --title "Success" --msgbox "
-卸载成功。
-            " 10 60
+            whiptail --title "Success" --msgbox "卸载成功。" 10 60
             fi
         fi
         chSensors
