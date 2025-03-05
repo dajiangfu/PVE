@@ -116,8 +116,7 @@ function install_intel_sr_iov_dkms(){
   #build-* 并不是一个官方推荐的安装方式，它可能会匹配到 大量不相关的软件
   #不推荐 直接使用 build-*，因为它可能会安装许多你 不需要的构建工具，导致系统安装冗余包
   #不建议使用 build-*，可能会安装不相关的包，占用磁盘空间并影响系统稳定性
-  #apt install build-essential dkms -y
-  apt install build-essential dkms
+  apt install build-essential dkms -y
   cd ~/i915-sriov-dkms
   if ! dkms add .; then
     red "DKMS 添加失败，退出！"
