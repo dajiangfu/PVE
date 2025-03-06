@@ -98,6 +98,17 @@ function update_pve(){
     red "软件包升级失败，请检查错误日志！"
     return 1
   fi
+  #询问用户是否重启
+  read -p "已更新完毕，是否重启系统？请输入 [Y/n]: " choice
+  choice=$(echo "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
+  [ -z "${choice}" ] && choice="y"
+  if [[ "$choice" == "y" ]]; then
+    green "系统将在 2 秒后重启..."
+    sleep 2
+    reboot
+  else
+    blue "已取消，请稍后自行重启。"
+  fi
 }
 
 #开启intel核显SR-IOV虚拟化直通
