@@ -43,21 +43,6 @@ function delete_local_lvm(){
   fi
 }
 
-#更新pve系统
-function update_pve(){
-  #检查你的sources.list文件，建议尽可能使用官方源不是替换的第三方源，如网络实在连不上官方源则使用第三方源
-  if ! apt update; then
-    red "存储库更新失败，请检查网络或 sources.list 配置或订阅密钥状态！"
-    return 1
-  fi
-
-  green "升级软件包..."
-  if ! apt dist-upgrade -y; then
-    red "软件包升级失败，请检查错误日志！"
-    return 1
-  fi
-}
-
 #取消无效订阅弹窗
 function delete_invalid_subscription_popup(){
   sed -Ezi.bak "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
@@ -98,6 +83,21 @@ function change_source(){
   echo "deb https://mirrors.ustc.edu.cn/proxmox/debian bookworm pve-no-subscription" >> "$file"
 
   green "替换完成！"
+}
+
+#更新pve系统
+function update_pve(){
+  #检查你的sources.list文件，建议尽可能使用官方源不是替换的第三方源，如网络实在连不上官方源则使用第三方源
+  if ! apt update; then
+    red "存储库更新失败，请检查网络或 sources.list 配置或订阅密钥状态！"
+    return 1
+  fi
+
+  green "升级软件包..."
+  if ! apt dist-upgrade -y; then
+    red "软件包升级失败，请检查错误日志！"
+    return 1
+  fi
 }
 
 #开启intel核显SR-IOV虚拟化直通
@@ -225,9 +225,9 @@ start_menu(){
   echo
   green " 1. 设置web登录页默认语言为简体中文"
   green " 2. 删除local_lvm"
-  green " 3. 更新pve系统"
-  green " 4. 取消无效订阅弹窗"
-  green " 5. PVE软件源更换"
+  green " 3. 取消无效订阅弹窗"
+  green " 4. PVE软件源更换"
+  green " 5. 更新pve系统"
   green " 6. 开启intel核显SR-IOV虚拟化直通"
   blue " 0. 退出脚本"
   echo
@@ -246,19 +246,19 @@ start_menu(){
   start_menu
   ;;
   3)
-  update_pve
+  delete_invalid_subscription_popup
   sleep 1s
   read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
   ;;
   4)
-  delete_invalid_subscription_popup
+  change_source
   sleep 1s
   read -s -n1 -p "按任意键返回上级菜单 ... "
   start_menu
   ;;
   5)
-  change_source
+  update_pve
   sleep 1s
   read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
