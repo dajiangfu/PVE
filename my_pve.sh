@@ -225,6 +225,50 @@ function install_intel_sr_iov_dkms(){
   fi
 }
 
+#安装UPS监控软件NUT
+function install_ups_nut(){
+  apt update
+  apt install -y nut #nut包通常会安装一些常见的依赖包，如 nut-client、nut-server、nut-cgi、nut-scanner，因此你可能不需要手动安装这些组件。
+  #查看UPS设备硬件信息
+  # nut-scanner #需要用户交互，在扫描过程中可能会提示用户做出选择，这个命令用于扫描计算机上连接的 UPS 设备，检查系统是否能够识别和通信，它会尝试自动检测并列出所有可用的 UPS 设备。
+  nut-scanner -U #-U 选项用于使扫描器以 "不带用户交互" 的方式运行，会自动执行扫描，不会要求用户输入任何内容，适合自动化操作。
+  green "安装NUT完成！下面进行配置"
+  #GitHub文件路径
+  BASE_URL="https://raw.githubusercontent.com/dajiangfu/PVE/main/nut"
+
+  #目标目录
+  DEST_DIR="/etc/nut"
+
+  #文件列表
+  FILES=("nut.conf" "ups.conf" "upsd.conf" "upsd.users" "upsmon.conf" "upssched.conf" "upssched-cmd")
+
+  #确保目标目录存在
+  if [ ! -d "$DEST_DIR" ]; then
+    blue "目录 $DEST_DIR 不存在，开始创建..."
+    mkdir -p "$DEST_DIR"
+  fi
+
+  #下载文件并保存到 /etc/nut 目录
+  for FILE in "${FILES[@]}"; do
+    green "下载 $FILE..."
+    curl -s -o "$DEST_DIR/$FILE" "$BASE_URL/$FILE"
+    if [ $? -eq 0 ]; then
+      green "$FILE 已下载并保存到 $DEST_DIR."
+    else
+      red "$FILE下载失败"
+    fi
+  done
+
+  green "所有文件下载成功"
+  green "重启服务..."
+  chown root:nut /etc/nut/upssched-cmd
+  chmod 750 /etc/nut/upssched-cmd
+  systemctl restart nut-server
+  systemctl restart nut-server
+  systemctl restart nut-monitor
+  upsc tgbox850@localhost
+}
+
 #开始菜单
 start_menu(){
   clear
@@ -240,6 +284,7 @@ start_menu(){
   green " 4. PVE软件源更换"
   green " 5. 更新pve系统"
   green " 6. 开启intel核显SR-IOV虚拟化直通"
+  green " 7. 安装UPS监控软件NUT"
   blue " 0. 退出脚本"
   echo
   read -p "请输入数字:" num
@@ -276,6 +321,12 @@ start_menu(){
   ;;
   6)
   install_intel_sr_iov_dkms
+  sleep 1s
+  read -s -n1 -p "按任意键返回上级菜单 ... "
+  start_menu
+  ;;
+  7)
+  install_ups_nut
   sleep 1s
   read -s -n1 -p "按任意键返回上级菜单 ... "
   start_menu
