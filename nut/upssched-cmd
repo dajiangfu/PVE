@@ -1,0 +1,43 @@
+#!/bin/sh
+case $1 in
+    power-off)
+    logger -t upssched-cmd "UPS running on battery"
+    # 获取当前电池电量
+    battery_charge=$(upsc tgbox850@localhost battery.charge)
+    # 如果电池电量低于60%，则执行关机操作
+    if [ "$battery_charge" -le 60 ]; then
+      # 关闭所有虚拟机
+      logger -t upssched-cmd "UPS battery charge is below 60%. Shutting down all VMs."
+      qm list | awk 'NR>1 {print $1}' | xargs -I {} qm shutdown {}
+      # 等待虚拟机关闭，检查每个虚拟机的状态
+      for vmid in $(qm list | awk 'NR>1 {print $1}'); do
+        while qm status $vmid | grep -q "running"; do
+          logger -t upssched-cmd "Waiting for VM $vmid to shut down..."
+          sleep 5
+        done
+        logger -t upssched-cmd "VM $vmid has been shut down."
+      done
+      # 关闭所有LXC容器
+      logger -t upssched-cmd "UPS battery charge is below 60%. Shutting down all LXC."
+      pct list | awk 'NR>1 {print $1}' | xargs -I {} pct shutdown {}
+      # 等待容器关闭，检查每个容器的状态
+      for containerid in $(pct list | awk 'NR>1 {print $1}'); do
+        while pct status $containerid | grep -q "running"; do
+          logger -t upssched-cmd "Waiting for LXC container $containerid to shut down..."
+          sleep 5
+        done
+        logger -t upssched-cmd "LXC container $containerid has been shut down."
+      done
+      # 等待虚拟机和容器关闭完成
+      sleep 60
+
+      # 关闭Proxmox VE系统
+      logger -t upssched-cmd "Shutting down Proxmox VE."
+      shutdown -h now  #此操作只关闭PVE，不关闭UPS，但UPS会根据电量消耗到默认的20%低电量或者nut中重新定义的35%(如果定义了的话)低电量后自动关机
+      #/usr/sbin/upsmon -c fsd  #此操作会关闭PVE后并关闭UPS，可能造成PVE还没关机完成就断电
+    fi
+    ;;
+    *)
+    logger -t upssched "Unrecognized command: $1"
+    ;;
+esac
