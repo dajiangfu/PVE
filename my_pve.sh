@@ -255,12 +255,35 @@ function install_ups_nut(){
     if [ $? -eq 0 ]; then
       green "$FILE 已下载并保存到 $DEST_DIR."
     else
-      red "$FILE下载失败"
+      red "$FILE下载失败，请检擦网络！"
+	  return 1
     fi
   done
 
   green "所有文件下载成功"
-  green "重启服务..."
+  
+  UPSD_USERS_FILE="/etc/nut/upsd.users"
+  UPSMON_CONF_FILE="/etc/nut/upsmon.conf"
+
+  #旧的用户名和密码
+  OLD_USERNAME="monusername"
+  OLD_PASSWORD="mima"
+
+  #提示用户输入新的用户名和密码
+  read -p "请输入新的用户名: " NEW_USERNAME
+  read -sp "请输入新的密码: " NEW_PASSWORD
+  echo ""
+
+  #备份原始文件
+  cp "$UPSD_USERS_FILE" "$UPSD_USERS_FILE.bak"
+  cp "$UPSMON_CONF_FILE" "$UPSMON_CONF_FILE.bak"
+
+  #使用sed替换用户名和密码
+  sed -i "s/$OLD_USERNAME/$NEW_USERNAME/g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
+  sed -i "s/$OLD_PASSWORD/$NEW_PASSWORD/g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
+
+  green "配置更新完成！重启服务..."
+  
   chown root:nut /etc/nut/upssched-cmd
   chmod 750 /etc/nut/upssched-cmd
   systemctl restart nut-server
