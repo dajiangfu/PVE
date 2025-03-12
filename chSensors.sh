@@ -1,7 +1,43 @@
 #!/bin/bash
 
+  #此脚本从pvetools.sh中提取，如需更新可下载pvetools重新提取
   #安装lm-sensors并配置在界面上显示
   #for i in `sed -n '/Chip drivers/,/\#----cut here/p' /tmp/sensors|sed '/Chip /d'|sed '/cut/d'`;do modprobe $i;done
+  #这个脚本 不只是修改 pvemanagerlib.js 和 Nodes.pm，还会：
+  #1、安装 lm-sensors，并修改 /etc/modules 让驱动自动加载
+  #2、创建 /usr/bin/s.sh，用于 PVE Web UI 获取 CPU 频率和温度数据
+  #3、修改 PVE Web UI，可能影响 Web 界面功能
+  #4、重启 PVE Web 服务，可能导致 Web UI 失效
+  #⚠ 风险：
+  #如果 lm-sensors 驱动不兼容，可能导致传感器无法使用甚至系统不稳定
+  #如果 /usr/bin/s.sh 生成的数据异常，PVE Web 界面可能崩溃
+  #修改 pvemanagerlib.js 和 Nodes.pm 可能影响 PVE 更新，甚至导致 Web UI 失效
+  #✅ 降低风险的方法：
+
+  #1、手动备份 /usr/share/pve-manager/js/pvemanagerlib.js 和 /usr/share/perl5/PVE/API2/Nodes.pm
+  #cp /usr/share/pve-manager/js/pvemanagerlib.js /root/pvemanagerlib.js.bak
+  #cp /usr/share/perl5/PVE/API2/Nodes.pm /root/Nodes.pm.bak
+  #2、先测试 lm-sensors 是否正常工作：
+  #apt-get install lm-sensors
+  #sensors-detect --auto
+  #sensors
+  
+  #如果遇到问题，手动恢复的步骤：
+  #1、恢复pvemanagerlib.js和Nodes.pm（手动备份或 apt-get install --reinstall pve-manager）
+  #cp /root/pvemanagerlib.js.bak /usr/share/pve-manager/js/pvemanagerlib.js
+  #cp /root/Nodes.pm.bak /usr/share/perl5/PVE/API2/Nodes.pm
+  #2、卸载 lm-sensors
+  #apt-get remove --purge lm-sensors -y
+  #3、清理 /etc/modules 里的传感器驱动
+  #脚本会把传感器驱动写入 /etc/modules，可以手动清理：
+  #nano /etc/modules
+  #删除 modprobe 加载的驱动（如果有的话），然后保存并退出（Ctrl+X -> Y -> Enter）
+  #4、删除 /usr/bin/s.sh
+  #rm -f /usr/bin/s.sh
+  #5、重启 PVE Web 代理
+  #systemctl restart pveproxy
+  #⚠ 恢复后建议刷新浏览器缓存，以确保 Web UI 正常显示。
+  
   clear
   x=$(whiptail --title " PveTools   Version : 2.4.0 " --menu "配置Sensors:" 25 60 15 \
 "a" "安装配置温度、CPU频率显示" \
