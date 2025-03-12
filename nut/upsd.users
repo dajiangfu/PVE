@@ -74,6 +74,6 @@
 # See comments in the upsmon.conf(.sample) file for details about this
 # keyword and the difference of NUT secondary and primary systems.
 
-[monuser]
-  password = cba4531186
+[monusername]
+  password = mima
   upsmon master
