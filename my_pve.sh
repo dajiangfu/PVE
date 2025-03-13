@@ -298,25 +298,34 @@ function install_glances_venv(){
   GLANCES_DIR="/opt/glances"
 
   #安装Python和venv
-  green "🐍 安装Python及venv..."
+  green "安装Python及venv..."
   apt update
   apt install -y python3 python3-venv python3-pip
 
   #创建venv
-  green "📦 创建Python虚拟环境..."
+  green "创建Python虚拟环境..."
   python3 -m venv $GLANCES_DIR
 
   #激活venv并安装Glances，激活venv后使用pip安装软件不会影响PVE系统所有安装的Python包都只会存放在/opt/glances目录，不会污染系统
-  green "⚙ 进入虚拟环境并安装Glances..."
+  green "进入虚拟环境并安装Glances..."
   source $GLANCES_DIR/bin/activate
   pip install --upgrade pip
   pip install glances
 
   #退出venv，退出venv后，pip重新指向系统Python，你的venv仍然保留，但不会影响其他操作。
   deactivate
+  
+  #软链接Glances让其全局可用
+  green "添加Glances到全局路径..."
+  ln -sf $GLANCES_DIR/bin/glances /usr/local/bin/glances
+  
+  #询问用户设置Glances访问的用户名和密码
+  read -p "请输入 Glances 认证用户名: " GLANCES_USER
+  read -s -p "请输入 Glances 认证密码: " GLANCES_PASS
+  echo ""  # 换行
 
   #询问用户是否启用WebUI
-  read -p "❓ 是否启用Glances WebUI（默认仅API模式）？[Y/n] " enable_web
+  read -p "是否启用Glances WebUI（默认仅API模式）？[Y/n] " enable_web
   enable_web=${enable_web:-N}  #默认不启用WebUI
 
   #选择Glances启动模式并自动设置Description
@@ -328,14 +337,14 @@ function install_glances_venv(){
   fi
 
   #创建systemd服务文件
-  green "🛠 创建 systemd 服务..."
+  green "创建 systemd 服务..."
 cat << EOF > /etc/systemd/system/glances.service
 [Unit]
 Description=$DESCRIPTION
 After=network.target
 
 [Service]
-ExecStart=$GLANCES_DIR/bin/glances $GLANCES_OPTIONS
+ExecStart=$GLANCES_DIR/bin/glances $GLANCES_OPTIONS --username $GLANCES_USER --password $GLANCES_PASS -B 0.0.0.0 -p 61208
 Restart=always
 User=root
 
@@ -344,7 +353,7 @@ WantedBy=multi-user.target
 EOF
 
   #重新加载systemd并启动Glances
-  green "🚀 启动Glances..."
+  green "启动Glances..."
   systemctl daemon-reload
   #systemctl enable glances
   #systemctl start glances
@@ -358,17 +367,33 @@ EOF
   #获取PVEIP地址
   PVE_IP=$(hostname -I | awk '{print $1}')
 
-  green "✅ Glances 安装完成！"
-  green "📡 API访问地址: http://$PVE_IP:61208"
-  green "📡 现在可以在Home Assistant添加Glances监控 PVE！"
+  green "Glances安装完成！"
+  green "API访问地址: http://$PVE_IP:61209"
+  green "现在可以在HomeAssistant添加Glances监控PVE！"
   if [[ "$enable_web" =~ ^[Yy]$ ]]; then
-    green "🌐 WebUI访问地址: http://$PVE_IP:61208"
+    green "WebUI访问地址: http://$PVE_IP:61209"
   fi
   #显示最终的服务描述
-  blue "📜 服务描述: $DESCRIPTION"
+  blue "服务描述: $DESCRIPTION"
   #如果以后不再需要Glances或其他Python软件，直接删除venv目录即可：
+  #systemctl stop glances
+  #systemctl disable glances
+  #rm -f /etc/systemd/system/glances.service
+  #rm -f /usr/local/bin/glances  #如果之前创建过glances命令的软链接，需要删除
   #rm -rf /opt/glances
+  #systemctl daemon-reload
   #这样就能完全清理掉Glances，而不会影响PVE系统、Python。
+}
+
+#删除GLANCES硬件监控服务
+function del_install_glances_venv(){
+  systemctl stop glances
+  systemctl disable glances
+  rm -f /etc/systemd/system/glances.service
+  rm -f /usr/local/bin/glances  #如果之前创建过glances命令的软链接，需要删除
+  rm -rf /opt/glances
+  systemctl daemon-reload
+  green "删除完成"
 }
 
 #开始菜单
@@ -388,6 +413,7 @@ start_menu(){
   green " 6. 开启intel核显SR-IOV虚拟化直通"
   green " 7. 安装UPS监控软件NUT"
   green " 8. 安装GLANCES硬件监控服务"
+  green " 9. 删除GLANCES硬件监控服务"
   blue " 0. 退出脚本"
   echo
   read -p "请输入数字:" num
@@ -436,6 +462,12 @@ start_menu(){
   ;;
   8)
   install_glances_venv
+  sleep 1s
+  read -s -n1 -p "按任意键返回上级菜单 ... "
+  start_menu
+  ;;
+  9)
+  del_install_glances_venv
   sleep 1s
   read -s -n1 -p "按任意键返回上级菜单 ... "
   start_menu
