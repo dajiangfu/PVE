@@ -292,6 +292,85 @@ function install_ups_nut(){
   upsc tgbox850@localhost
 }
 
+#安装GLANCES硬件监控服务
+function install_glances_venv(){
+  #设置Glances安装目录
+  GLANCES_DIR="/opt/glances"
+
+  #安装Python和venv
+  green "🐍 安装Python及venv..."
+  apt update
+  apt install -y python3 python3-venv python3-pip
+
+  #创建venv
+  green "📦 创建Python虚拟环境..."
+  python3 -m venv $GLANCES_DIR
+
+  #激活venv并安装Glances，激活venv后使用pip安装软件不会影响PVE系统所有安装的Python包都只会存放在/opt/glances目录，不会污染系统
+  green "⚙ 进入虚拟环境并安装Glances..."
+  source $GLANCES_DIR/bin/activate
+  pip install --upgrade pip
+  pip install glances
+
+  #退出venv，退出venv后，pip重新指向系统Python，你的venv仍然保留，但不会影响其他操作。
+  deactivate
+
+  #询问用户是否启用WebUI
+  read -p "❓ 是否启用Glances WebUI（默认仅API模式）？[Y/n] " enable_web
+  enable_web=${enable_web:-N}  #默认不启用WebUI
+
+  #选择Glances启动模式并自动设置Description
+  GLANCES_OPTIONS="--server"
+  DESCRIPTION="Glances API Mode"
+  if [[ "$enable_web" =~ ^[Yy]$ ]]; then
+    GLANCES_OPTIONS="$GLANCES_OPTIONS -w"
+	DESCRIPTION="Glances API and WebUI Mode"
+  fi
+
+  #创建systemd服务文件
+  green "🛠 创建 systemd 服务..."
+cat << EOF > /etc/systemd/system/glances.service
+[Unit]
+Description=$DESCRIPTION
+After=network.target
+
+[Service]
+ExecStart=$GLANCES_DIR/bin/glances $GLANCES_OPTIONS
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  #重新加载systemd并启动Glances
+  green "🚀 启动Glances..."
+  systemctl daemon-reload
+  #systemctl enable glances
+  #systemctl start glances
+  systemctl enable --now glances
+  #systemctl enable --now glances 的作用
+  #这个命令等同于两步操作：
+  #systemctl enable glances   # 设置开机自启
+  #systemctl start glances    # 立即启动服务
+  #--now 选项表示同时启用（开机自启）并立即启动该服务。
+
+  #获取PVEIP地址
+  PVE_IP=$(hostname -I | awk '{print $1}')
+
+  green "✅ Glances 安装完成！"
+  green "📡 API访问地址: http://$PVE_IP:61208"
+  green "📡 现在可以在Home Assistant添加Glances监控 PVE！"
+  if [[ "$enable_web" =~ ^[Yy]$ ]]; then
+    green "🌐 WebUI访问地址: http://$PVE_IP:61208"
+  fi
+  #显示最终的服务描述
+  blue "📜 服务描述: $DESCRIPTION"
+  #如果以后不再需要Glances或其他Python软件，直接删除venv目录即可：
+  #rm -rf /opt/glances
+  #这样就能完全清理掉Glances，而不会影响PVE系统、Python。
+}
+
 #开始菜单
 start_menu(){
   clear
@@ -308,6 +387,7 @@ start_menu(){
   green " 5. 更新pve系统"
   green " 6. 开启intel核显SR-IOV虚拟化直通"
   green " 7. 安装UPS监控软件NUT"
+  green " 8. 安装GLANCES硬件监控服务"
   blue " 0. 退出脚本"
   echo
   read -p "请输入数字:" num
@@ -350,6 +430,12 @@ start_menu(){
   ;;
   7)
   install_ups_nut
+  sleep 1s
+  read -s -n1 -p "按任意键返回上级菜单 ... "
+  start_menu
+  ;;
+  8)
+  install_glances_venv
   sleep 1s
   read -s -n1 -p "按任意键返回上级菜单 ... "
   start_menu
