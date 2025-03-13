@@ -9,3 +9,5 @@ curl -O https://raw.githubusercontent.com/dajiangfu/PVE/master/my_pve.sh && chmo
 配置pve的web界面显示传感器温度、CPU频率运行方法：
 
 curl -O https://raw.githubusercontent.com/dajiangfu/PVE/master/chSensors.sh && chmod +x chSensors.sh && ./chSensors.sh
+
+感谢chatgpt的帮助！
