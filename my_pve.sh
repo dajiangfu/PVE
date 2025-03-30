@@ -377,6 +377,20 @@ function del_install_glances_venv(){
   green "删除完成"
 }
 
+function close_ksm(){
+  #禁用ksmtuned服务
+  systemctl disable --now ksmtuned
+  #禁用KSM内核功能
+  echo 0 > /sys/kernel/mm/ksm/run
+  #验证KSM是否已禁用，输出应该为0
+  ksm_status=$(cat /sys/kernel/mm/ksm/run)
+  if [ "$ksm_status" -eq 0 ]; then
+    green "KSM已禁用"
+  else
+    red "KSM禁用失败，当前状态（0禁用，1启用，2启用并开启自动调优）: $ksm_status"
+  fi
+}
+
 #开始菜单
 start_menu(){
   clear
@@ -395,6 +409,7 @@ start_menu(){
   green " 7. 安装UPS监控软件NUT"
   green " 8. 安装GLANCES硬件监控服务"
   green " 9. 删除GLANCES硬件监控服务"
+  green " 10. 关闭KSM服务"
   blue " 0. 退出脚本"
   echo
   read -p "请输入数字:" num
@@ -449,6 +464,12 @@ start_menu(){
   ;;
   9)
   del_install_glances_venv
+  sleep 1s
+  read -s -n1 -p "按任意键返回上级菜单 ... "
+  start_menu
+  ;;
+  10)
+  close_ksm
   sleep 1s
   read -s -n1 -p "按任意键返回上级菜单 ... "
   start_menu
