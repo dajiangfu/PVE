@@ -154,7 +154,7 @@ function install_intel_sr_iov_dkms(){
     return 1
   fi
   #运行 dkms status 并检查i915-sriov-dkms是否已安装"
-  if dkms status -m i915-sriov-dkms | grep -iqE ":\s+installed$"; then
+  if dkms status -m i915-sriov-dkms | grep -iqE ":\s+installed"; then
     green "i915-sriov-dkms已安装，继续..."
   else
     red "i915-sriov-dkms未安装，退出！"
