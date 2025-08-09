@@ -94,10 +94,16 @@ function update_pve(){
   fi
 
   green "升级软件包..."
-  if ! apt dist-upgrade -y; then
+  if ! apt full-upgrade; then
     red "软件包升级失败，请检查错误日志！"
     return 1
   fi
+  
+  #检查系统中不再被任何已安装软件依赖的包
+  apt autoremove --purge --dry-run | grep -v "$(uname -r)"
+  #执行清理
+  apt autoremove --purge
+  
   #询问用户是否重启
   read -p "已更新完毕，是否重启系统？请输入 [Y/n]: " choice
   choice=$(echo "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
