@@ -65,18 +65,11 @@ function change_source(){
 
   if [ -d "$dir" ]; then
     echo "正在删除目录 $dir..."
-	
-    green "开始检查并删除 PVE 相关的源文件..."
-    for dirfile in "$dir"/*; do
-      # 判断是否为文件且文件名包含pve或proxmox
-      if [ -f "$dirfile" ] && [[ "$(basename "$dirfile")" =~ pve|proxmox ]]; then
-        rm -f "$dirfile"
-        green "已删除 $dirfile"
-      else
-        yellow "保留 $dirfile"
-      fi
-    done
-	
+    if rm -rf "$dir"; then
+        green "删除完成"
+    else
+        red "删除失败"
+    fi
   else
     yellow "目录 $dir 不存在，跳过删除"
   fi
