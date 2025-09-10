@@ -64,7 +64,7 @@ function change_source(){
   file="/etc/apt/sources.list"
 
   if [ -d "$dir" ]; then
-    echo "正在删除目录 $dir..."
+    yellow "正在删除目录 $dir..."
     if rm -rf "$dir"; then
         green "删除完成"
     else
@@ -74,7 +74,7 @@ function change_source(){
     yellow "目录 $dir 不存在，跳过删除"
   fi
 
-  echo "正在替换 $file 中的内容..."
+  yellow "正在替换 $file 中的内容..."
 
   echo "deb https://mirrors.ustc.edu.cn/debian/ trixie main contrib non-free non-free-firmware" > "$file"
   echo "deb https://mirrors.ustc.edu.cn/debian/ trixie-updates main contrib non-free non-free-firmware" >> "$file"

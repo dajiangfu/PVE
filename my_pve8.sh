@@ -75,33 +75,12 @@ function change_source(){
   fi
 
   yellow "正在替换 $file 中的内容..."
-  
-  green "请选择要使用的 PVE 源版本："
-  green "1) PVE8 (Debian Bookworm)"
-  green "2) PVE9 (Debian Trixie)"
-  read -p "请输入数字 (1 或 2): " choice
-  case "$choice" in
-    1)
-      green "使用 PVE8 (Debian Bookworm) 源..."
-      echo "deb https://mirrors.ustc.edu.cn/debian/ bookworm main contrib non-free non-free-firmware" > "$file"
-      echo "deb https://mirrors.ustc.edu.cn/debian/ bookworm-updates main contrib non-free non-free-firmware" >> "$file"
-      echo "deb https://mirrors.ustc.edu.cn/debian/ bookworm-backports main contrib non-free non-free-firmware" >> "$file"
-      echo "deb https://mirrors.ustc.edu.cn/debian-security bookworm-security main" >> "$file"
-      echo "deb https://mirrors.ustc.edu.cn/proxmox/debian bookworm pve-no-subscription" >> "$file"
-      ;;
-    2)
-      green "使用 PVE9 (Debian Trixie) 源..."
-      echo "deb https://mirrors.ustc.edu.cn/debian/ trixie main contrib non-free non-free-firmware" > "$file"
-      echo "deb https://mirrors.ustc.edu.cn/debian/ trixie-updates main contrib non-free non-free-firmware" >> "$file"
-      echo "deb https://mirrors.ustc.edu.cn/debian/ trixie-backports main contrib non-free non-free-firmware" >> "$file"
-      echo "deb https://mirrors.ustc.edu.cn/debian-security trixie-security main" >> "$file"
-      echo "deb https://mirrors.ustc.edu.cn/proxmox/debian trixie pve-no-subscription" >> "$file"
-      ;;
-    *)
-      red "输入错误，退出！"
-      exit 1
-      ;;
-  esac
+
+  echo "deb https://mirrors.ustc.edu.cn/debian/ bookworm main contrib non-free non-free-firmware" > "$file"
+  echo "deb https://mirrors.ustc.edu.cn/debian/ bookworm-updates main contrib non-free non-free-firmware" >> "$file"
+  echo "deb https://mirrors.ustc.edu.cn/debian/ bookworm-backports main contrib non-free non-free-firmware" >> "$file"
+  echo "deb https://mirrors.ustc.edu.cn/debian-security bookworm-security main" >> "$file"
+  echo "deb https://mirrors.ustc.edu.cn/proxmox/debian bookworm pve-no-subscription" >> "$file"
 
   green "替换完成！"
 }
