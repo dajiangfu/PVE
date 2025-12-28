@@ -901,7 +901,7 @@ start_menu(){
   green " 3. 取消无效订阅弹窗"
   green " 4. PVE软件源更换"
   green " 5. 更新pve系统"
-  grenn " 6. 更新pve系统且重启后执行系统清理程序"
+  green " 6. 更新pve系统且重启后执行系统清理程序"
   green " 7. 开启intel核显SR-IOV虚拟化直通"
   green " 8. 安装UPS监控软件NUT"
   green " 9. 安装GLANCES硬件监控服务"
