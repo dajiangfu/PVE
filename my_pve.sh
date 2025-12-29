@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#注意：本脚本只针对PVE9编写，专用于PVE9
+# 注意：本脚本只针对 PVE9 编写，专用于 PVE9
 
 blue() {
   echo -e "\033[34m\033[01m$1\033[0m"
@@ -32,15 +32,7 @@ spinner() {
   printf "    \b\b\b\b"
 }
 
-#设置web登录页默认语言为简体中文
-# set_default_language_zh_CN() {
-#   if grep -q "^language:" /etc/pve/datacenter.cfg; then
-#     sed -i 's/^language:.*/language: zh_CN/' /etc/pve/datacenter.cfg
-#   else
-#     echo 'language: zh_CN' >> /etc/pve/datacenter.cfg
-#   fi
-#   green "PVE 默认语言已设置为 zh_CN（刷新 Web 即可生效）"
-# }
+# 设置 web 登录页默认语言为简体中文
 set_default_language_zh_CN() {
   local cfg="/etc/pve/datacenter.cfg"
   local tmp_file
@@ -75,9 +67,9 @@ set_default_language_zh_CN() {
 }
 
 
-#删除local_lvm
-#PVE安装好后的第一件事就是删除local-lvm分区
-#PVE系统在安装的时候默认会把储存划分为local和local-lvm两个块，在实际使用的时候往往其中一个不够用了另一个还很空的情况，可以删除local-lvm的空间，然后把全部分配给local，方便自己管理
+# 删除 local_lvm
+# PVE 安装好后的第一件事就是删除 local-lvm 分区
+# PVE 系统在安装的时候默认会把储存划分为 local 和 local-lvm 两个块，在实际使用的时候往往其中一个不够用了另一个还很空的情况，可以删除 local-lvm 的空间，然后把全部分配给 local，方便自己管理
 delete_local_lvm() {
   # 0. 确认 VG pve 存在
   if ! vgs pve >/dev/null 2>&1; then
@@ -118,7 +110,7 @@ delete_local_lvm() {
 }
 
 
-#取消无效订阅弹窗
+# 取消无效订阅弹窗
 delete_invalid_subscription_popup() {
   local jsfile="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
   local bakjs="${jsfile}.bak"
@@ -151,7 +143,7 @@ show_current_source() {
   fi
 }
 
-#PVE软件源更换
+# PVE 软件源更换
 change_source() {
   local sources_file="/etc/apt/sources.list.d/debian.sources"
   local baksources="${sources_file}.bak"
@@ -165,13 +157,13 @@ change_source() {
     cp "$sources_file" "$baksources"
   fi
   
-  #PVE9起删除旧的.list文件（如有）
+  # PVE9 起删除旧的 .list 文件（如有）
   rm -f /etc/apt/sources.list
   rm -f /etc/apt/sources.list.d/*.list
   
-  #强烈建议先删除企业源
+  # 强烈建议先删除企业源
   rm -f /etc/apt/sources.list.d/pve-enterprise.sources
-  #然后配置免订阅存储库 pve-no-subscription
+  # 然后配置免订阅存储库 pve-no-subscription
   # 仅第一次创建 PVE 源的备份
   if [ ! -f "$bakproxmox" ]; then
     cat > "$proxmox_file" <<'EOF'
@@ -240,10 +232,10 @@ EOF
   green "替换完成！"
 }
 
-#更新pve系统
+# 更新 pve 系统
 update_pve() {
   local choice="n"
-  #检查你的 sources.list/sources.sources 文件，建议尽可能使用官方源不是替换的第三方源，如网络实在连不上官方源则使用第三方源
+  # 检查你的 sources.list/sources.sources 文件，建议尽可能使用官方源不是替换的第三方源，如网络实在连不上官方源则使用第三方源
   if ! apt update; then
     red "存储库更新失败，请检查网络或 sources.list 配置或订阅密钥状态！"
     return 1
@@ -255,11 +247,11 @@ update_pve() {
     return 1
   fi
   
-  #清理本地缓存中过期的 .deb 包（存放在 /var/cache/apt/archives）
+  # 清理本地缓存中过期的 .deb 包（存放在 /var/cache/apt/archives）
   apt autoclean
   green "注意要在重启后运行此脚本中的更新pve系统且重启后执行系统清理程序！"
   
-  #询问用户是否重启
+  # 询问用户是否重启
   read -p "已更新完毕，是否重启系统？请输入 [Y/n]: " choice
   choice=$(echo "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
   [ -z "${choice}" ] && choice="y"
@@ -273,34 +265,34 @@ update_pve() {
   fi
 }
 
-#更新pve系统且重启后执行系统清理程序
+# 更新 pve 系统且重启后执行系统清理程序
 cleanup_pve() {
-  #清理本地缓存中过期的 .deb 包（存放在 /var/cache/apt/archives）
+  # 清理本地缓存中过期的 .deb 包（存放在 /var/cache/apt/archives）
   apt autoclean
-  #检查系统中不再被任何已安装软件依赖的包
+  # 检查系统中不再被任何已安装软件依赖的包
   apt autoremove --purge --dry-run | grep -v "$(uname -r)"
-  #执行清理
+  # 执行清理
   apt autoremove --purge
 }
 
-#开启intel核显SR-IOV虚拟化直通
+# 开启 intel 核显 SR-IOV 虚拟化直通
 install_intel_sr_iov_dkms() {
   local choice="n"
-  #克隆 DKMS repo 并做一些构建工作
+  # 克隆 DKMS repo 并做一些构建工作
   apt update && apt install git sysfsutils pve-headers mokutil -y
   rm -rf /usr/src/i915-sriov-dkms-*
   rm -rf /var/lib/dkms/i915-sriov-dkms
   rm -rf ~/i915-sriov-dkms*
-  #find /lib/modules -regex ".*/updates/dkms/i915.ko" -delete # 只删除了模块文件 (.ko)，DKMS 数据库和源码目录未删除，dkms status 仍显示安装；可能导致内核模块状态不一致
+  # find /lib/modules -regex ".*/updates/dkms/i915.ko" -delete # 只删除了模块文件 (.ko)，DKMS 数据库和源码目录未删除，dkms status 仍显示安装；可能导致内核模块状态不一致
   dkms remove -m i915-sriov-dkms --all || true # 相对于 find -delete，DKMS 机制保证内核和模块状态一致，不误删，删除的更干净
 
   cd ~
   git clone https://github.com/strongtz/i915-sriov-dkms.git
-  #apt install build-* dkms
-  #build-* 是 通配符匹配，它会安装所有以 build- 开头的包，这可能包括大量不必要的软件。
-  #build-* 并不是一个官方推荐的安装方式，它可能会匹配到 大量不相关的软件
-  #不推荐 直接使用 build-*，因为它可能会安装许多你 不需要的构建工具，导致系统安装冗余包
-  #不建议使用 build-*，可能会安装不相关的包，占用磁盘空间并影响系统稳定性
+  # apt install build-* dkms
+  # build-* 是 通配符匹配，它会安装所有以 build- 开头的包，这可能包括大量不必要的软件。
+  # build-* 并不是一个官方推荐的安装方式，它可能会匹配到 大量不相关的软件
+  # 不推荐 直接使用 build-*，因为它可能会安装许多你 不需要的构建工具，导致系统安装冗余包
+  # 不建议使用 build-*，可能会安装不相关的包，占用磁盘空间并影响系统稳定性
   apt install build-essential dkms -y
   cd ~/i915-sriov-dkms
   green "正在添加 DKMS 源码..."
@@ -309,12 +301,12 @@ install_intel_sr_iov_dkms() {
     return 1
   fi
 
-  #构建新内核并检查状态。验证它是否显示已安装
-#  local VERSION=$(dkms status -m i915-sriov-dkms -k $(uname -r) | awk -F'[,/]' '/installed/{print $2; exit}')
-#  if [ -z "$VERSION" ]; then
-#    red "无法获取 i915-sriov-dkms 版本，退出！"
-#    return 1
-#  fi
+  # 构建新内核并检查状态。验证它是否显示已安装
+  # local VERSION=$(dkms status -m i915-sriov-dkms -k $(uname -r) | awk -F'[,/]' '/installed/{print $2; exit}')
+  # if [ -z "$VERSION" ]; then
+    # red "无法获取 i915-sriov-dkms 版本，退出！"
+    # return 1
+  # fi
   green "正在为内核 $(uname -r) 编译并安装驱动..."
   if ! dkms install i915-sriov-dkms -k "$(uname -r)" --force; then
     red "DKMS 安装失败！请检查以下内容："
@@ -323,7 +315,7 @@ install_intel_sr_iov_dkms() {
     red "3. 运行 dkms status 确保模块被正确识别"
     return 1
   fi
-  #运行 dkms status 并检查i915-sriov-dkms是否已安装"
+  # 运行 dkms status 并检查i915-sriov-dkms是否已安装"
   if dkms status -m i915-sriov-dkms | grep -iqE ":\s+installed"; then
     green "i915-sriov-dkms已安装，继续..."
   else
@@ -331,37 +323,37 @@ install_intel_sr_iov_dkms() {
     return 1
   fi
 
-  #对于全新安装的 Proxmox 8.1 及更高版本，可以启用安全启动。以防万一，我们需要加载 DKMS 密钥，以便内核加载模块。
-  #运行以下命令，然后输入密码。此密码仅用于 MOK 设置，重新启动主机时将再次使用。此后，不需要密码。
-  #它不需要与您用于 root 帐户的密码相同。
+  # 对于全新安装的 Proxmox 8.1 及更高版本，可以启用安全启动。以防万一，我们需要加载 DKMS 密钥，以便内核加载模块。
+  # 运行以下命令，然后输入密码。此密码仅用于 MOK 设置，重新启动主机时将再次使用。此后，不需要密码。
+  # 它不需要与您用于 root 帐户的密码相同。
   green "即将导入 MOK 密钥。请注意："
   yellow "1. 请输入一个临时密码（至少8位）。"
   yellow "2. 在PVE重启时的显示器启动界面依次选择Enroll MOK--->Continue--->Yes--->password(输入之前设置的MOK密码回车)--->Reboot"
   mokutil --import /var/lib/dkms/mok.pub
   
-  #获取 PVE 版本号（去掉无关信息）
-  #local PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d' ' -f1 | cut -d'-' -f1)#此命令也可用，但较冗长
+  # 获取 PVE 版本号（去掉无关信息）
+  # local PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d' ' -f1 | cut -d'-' -f1)#此命令也可用，但较冗长
   local PVE_VERSION=$(pveversion | cut -d'/' -f2 | cut -d'-' -f1)
   echo "当前 PVE 版本: $PVE_VERSION"
   
-  #Proxmox GRUB 配置，Proxmox 的默认安装使用 GRUB 引导加载程序
-  #module_blacklist=xe是黑名单xe驱动，避免系统自动切换为xe驱动，i915驱动更成熟，且istoreos中也是i915驱动
-  #initcall_blacklist=sysfb_init是禁用framebuffer 初始化，宿主机无法显示 HDMI/DP 图形界面，有利于VM中通过HDMI/DP显示画面，我的PVE系统本身不需要用显示器接口看画面，只在VM中使用显卡，可以加
+  # Proxmox GRUB 配置，Proxmox 的默认安装使用 GRUB 引导加载程序
+  # module_blacklist=xe 是黑名单 xe 驱动，避免系统自动切换为 xe 驱动，i915 驱动更成熟，且 istoreos 中也是 i915 驱动
+  # initcall_blacklist=sysfb_init 是禁用 framebuffer 初始化，宿主机无法显示 HDMI/DP 图形界面，有利于 VM 中通过 HDMI/DP 显示画面，我的 PVE 系统本身不需要用显示器接口看画面，只在 VM 中使用显卡，可以加
   cp -a /etc/default/grub{,.bak}
   sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3 module_blacklist=xe initcall_blacklist=sysfb_init"' /etc/default/grub
   
-  #加载内核模块:
-  #echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" >> /etc/modules #此命令会造成重复追加，废除
+  # 加载内核模块:
+  # echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" >> /etc/modules # 此命令会造成重复追加，废除
   local modules=("vfio" "vfio_iommu_type1" "vfio_pci" "vfio_virqfd")
   for m in "${modules[@]}"; do
       grep -qxF "$m" /etc/modules || echo "$m" >> /etc/modules
   done
 
-  #完成 PCI 配置
-  #现在我们需要找到 VGA 卡位于哪个 PCIe 总线上。通常VGA总线ID为00:02.0
-  #获取 VGA 设备的 PCIe 总线号
-  #local vga_id=$(lspci | grep VGA | awk '{print $1}') #此命令会造成多个vga_id被赋值到一起
-  local vga_id=$(lspci | grep VGA | awk '{print $1}' | head -n1) #取第一行物理GPU的vga_id，因为物理GPU的vga_id是.0地址总是在最前面，VF的vga_id是从.1开始的
+  # 完成 PCI 配置
+  # 现在我们需要找到 VGA 卡位于哪个 PCIe 总线上。通常 VGA 总线 ID 为 00:02.0
+  # 获取 VGA 设备的 PCIe 总线号
+  # local vga_id=$(lspci | grep VGA | awk '{print $1}') # 此命令会造成多个 vga_id 被赋值到一起
+  local vga_id=$(lspci | grep VGA | awk '{print $1}' | head -n1) # 取第一行物理 GPU 的 vga_id，因为物理 GPU 的vga_id 是 .0 地址总是在最前面，VF 的 vga_id 是从 .1 开始的
 
   #确保成功获取 vga_id
   if [ -z "$vga_id" ]; then
@@ -369,28 +361,28 @@ install_intel_sr_iov_dkms() {
     return 1
   fi
 
-  #生成 sysfs 配置
-  #echo "devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3" > /etc/sysfs.conf #此命令会造成重复追加，废除
+  # 生成 sysfs 配置
+  # echo "devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3" > /etc/sysfs.conf # 此命令会造成重复追加，废除
   local sysfs_line="devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3"
   touch /etc/sysfs.conf
   grep -qxF "$sysfs_line" /etc/sysfs.conf || echo "$sysfs_line" >> /etc/sysfs.conf
   systemctl enable sysfsutils
 
-  #输出结果
+  # 输出结果
   echo "已写入 /etc/sysfs.conf，内容如下："
-  #cat该文件并确保它已被修改
+  # cat 该文件并确保它已被修改
   cat /etc/sysfs.conf
   
-  #应用修改
+  # 应用修改
   update-grub
   update-initramfs -u -k all
   
-  #重启 Proxmox 主机。如果使用 Proxmox 8.1 或更高版本并启用安全启动，则必须设置 MOK。
-  #在 Proxmox 主机重启时，监控启动过程并等待执行 MOK 管理窗口（下面的屏幕截图）。
-  #如果错过了第一次重启，则需要重新运行 mokutil 命令并再次重启。DKMS 模块将不会加载，直到您完成此设置
-  #在PVE重启时的显示器启动界面依次选择Enroll MOK--->Continue--->Yes--->password(输入之前设置的MOK密码回车)--->Reboot
-  #硬件里面添加PCI设备可选择虚拟出来的几个SR-IOV核显，注意要记得勾选主GPU和PCI-Express，显示设置为VirtlO-GPU，这样控制台才有画面
-  #询问用户是否重启
+  # 重启 Proxmox 主机。如果使用 Proxmox 8.1 或更高版本并启用安全启动，则必须设置 MOK。
+  # 在 Proxmox 主机重启时，监控启动过程并等待执行 MOK 管理窗口（下面的屏幕截图）。
+  # 如果错过了第一次重启，则需要重新运行 mokutil 命令并再次重启。DKMS 模块将不会加载，直到您完成此设置
+  # 在PVE重启时的显示器启动界面依次选择 Enroll MOK--->Continue--->Yes--->password (输入之前设置的MOK密码回车) --->Reboot
+  # 硬件里面添加 PCI 设备可选择虚拟出来的几个 SR-IOV 核显，注意要记得勾选主 GPU 和 PCI-Express，显示设置为 VirtlO-GPU，这样控制台才有画面
+  # 询问用户是否重启
   read -p "已设置完毕，是否重启系统？请输入 [Y/n]: " choice
   choice=$(echo "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
   [ -z "${choice}" ] && choice="y"
@@ -403,30 +395,30 @@ install_intel_sr_iov_dkms() {
   fi
 }
 
-#安装UPS监控软件NUT
+# 安装 UPS 监控软件 NUT
 install_ups_nut() {
   apt update
   apt install -y nut #nut包通常会安装一些常见的依赖包，如 nut-client、nut-server、nut-cgi、nut-scanner，因此你可能不需要手动安装这些组件。
-  #查看UPS设备硬件信息
-  # nut-scanner #需要用户交互，在扫描过程中可能会提示用户做出选择，这个命令用于扫描计算机上连接的 UPS 设备，检查系统是否能够识别和通信，它会尝试自动检测并列出所有可用的 UPS 设备。
-  nut-scanner -U #-U 选项用于使扫描器以 "不带用户交互" 的方式运行，会自动执行扫描，不会要求用户输入任何内容，适合自动化操作。
+  # 查看 UPS 设备硬件信息
+  # nut-scanner # 需要用户交互，在扫描过程中可能会提示用户做出选择，这个命令用于扫描计算机上连接的 UPS 设备，检查系统是否能够识别和通信，它会尝试自动检测并列出所有可用的 UPS 设备。
+  nut-scanner -U # -U 选项用于使扫描器以 "不带用户交互" 的方式运行，会自动执行扫描，不会要求用户输入任何内容，适合自动化操作。
   green "安装NUT完成！下面进行配置"
-  #GitHub文件路径
+  # GitHub 文件路径
   local BASE_URL="https://raw.githubusercontent.com/dajiangfu/PVE/main/nut"
   
-  #目标目录
+  # 目标目录
   local DEST_DIR="/etc/nut"
   
-  #文件列表
+  # 文件列表
   local FILES=("nut.conf" "ups.conf" "upsd.conf" "upsd.users" "upsmon.conf" "upssched.conf" "upssched-cmd")
   
-  #确保目标目录存在
+  # 确保目标目录存在
   if [ ! -d "$DEST_DIR" ]; then
     blue "目录 $DEST_DIR 不存在，开始创建..."
     mkdir -p "$DEST_DIR"
   fi
   
-  #下载文件并保存到 /etc/nut 目录
+  # 下载文件并保存到 /etc/nut 目录
   local FILE
   for FILE in "${FILES[@]}"; do
     green "下载 $FILE..."
@@ -440,13 +432,13 @@ install_ups_nut() {
   local UPSD_USERS_FILE="/etc/nut/upsd.users"
   local UPSMON_CONF_FILE="/etc/nut/upsmon.conf"
   
-  #旧的用户名和密码
+  # 旧的用户名和密码
   local OLD_USERNAME="monusername"
   local OLD_PASSWORD="mima"
   local NEW_USERNAME="monusername"
   local NEW_PASSWORD="mima"
   
-  #提示用户输入新的用户名和密码，如果用户直接按回车（什么都不输入），变量就会自动被赋值为默认值
+  # 提示用户输入新的用户名和密码，如果用户直接按回车（什么都不输入），变量就会自动被赋值为默认值
   read -p "请输入新的 NUT 监控用户名 [默认: monusername]: " NEW_USERNAME
   # 如果输入为空，设置默认值并给用户提示
   if [ -z "$NEW_USERNAME" ]; then
@@ -465,19 +457,19 @@ install_ups_nut() {
     green "-> 密码已自定义。"
   fi
   
-  #备份原始文件
+  # 备份原始文件
   cp "$UPSD_USERS_FILE" "$UPSD_USERS_FILE.bak"
   cp "$UPSMON_CONF_FILE" "$UPSMON_CONF_FILE.bak"
   
   # 对用户名和密码进行转义，避免特殊字符导致 sed 出错
   local ESCAPED_NEW_USERNAME=$(printf '%s\n' "$NEW_USERNAME" | sed 's/[\/&]/\\&/g')
   local ESCAPED_NEW_PASSWORD=$(printf '%s\n' "$NEW_PASSWORD" | sed 's/[\/&]/\\&/g')
-  #使用sed替换用户名和密码
+  # 使用 sed 替换用户名和密码
   sed -i "s#$OLD_USERNAME#$ESCAPED_NEW_USERNAME#g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
   sed -i "s#$OLD_PASSWORD#$ESCAPED_NEW_PASSWORD#g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
   
   green "正在优化配置文件权限..."
-  # 1. 设置所有权：root拥有，nut组可读
+  # 1. 设置所有权：root 拥有，nut 组可读
   chown root:nut /etc/nut/*
   
   # 2. 设置普通配置文件：640 (属主读写，组只读，其他无权)
@@ -574,7 +566,7 @@ update_microcode() {
   fi
 }
 
-#THP（Transparent Huge Pages）设置为 madvise 智能模式，对不需要的程序默认关闭，对需要的程序开启
+# THP（Transparent Huge Pages）设置为 madvise 智能模式，对不需要的程序默认关闭，对需要的程序开启
 set_thp_madvise() {
   local thp_enabled="/sys/kernel/mm/transparent_hugepage/enabled"
   local thp_defrag="/sys/kernel/mm/transparent_hugepage/defrag"
@@ -596,7 +588,7 @@ set_thp_madvise() {
   echo "当前 enabled 状态: $current_thp"
   echo "当前 defrag 状态: $current_defrag"
   if [[ "$current_thp" =~ \[madvise\] && "$current_defrag" =~ \[madvise\] ]]; then
-    green "THP 及其碎片整理 (Defrag) 已全部锁定为 madvise 模式"
+    green "THP 及其碎片整理 (Defrag) 已全部锁定为 madvise 模式，无需重复设置"
 	return 0
   fi
   
@@ -648,7 +640,7 @@ EOF
   fi
 }
 
-#改变 swappiness 值，保证物理内存充分使用，减少 swap
+# 改变 swappiness 值，保证物理内存充分使用，减少 swap
 change_swa() {
   local current_swp=$(cat /proc/sys/vm/swappiness)
   local target_swp=10  # 建议设为 10，这是更具性能导向的 PVE 常用值
@@ -792,7 +784,7 @@ EOF
     done
 }
 
-#PVE常用优化，一键执行多项
+# PVE 常用优化，一键执行多项
 Kernel_opt() {
   close_ksm
   update_microcode
@@ -802,21 +794,21 @@ Kernel_opt() {
   set_cpu_performance
 }
 
-#安装GLANCES硬件监控服务
+# 安装 GLANCES 硬件监控服务
 install_glances_venv(){
-  #设置Glances安装目录
-  #GLANCES_DIR="/opt/glances"  #调用使用$GLANCES_DIR
+  # 设置Glances安装目录
+  # GLANCES_DIR="/opt/glances"  # 调用使用$GLANCES_DIR
 
-  #安装Python和venv
+  # 安装 Python 和 venv
   green "安装Python及venv..."
   apt update
   apt install -y python3 python3-pip python3-venv lm-sensors
 
-  #创建venv
+  # 创建 venv
   green "创建Python虚拟环境..."
   python3 -m venv /opt/glances
 
-  #激活venv并安装Glances，激活venv后使用pip安装软件不会影响PVE系统所有安装的Python包都只会存放在/opt/glances目录，不会污染系统
+  # 激活 venv 并安装 Glances，激活 venv 后使用 pip 安装软件不会影响 PVE 系统所有安装的 Python 包都只会存放在 /opt/glances 目录，不会污染系统
   green "进入虚拟环境并安装Glances..."
   source /opt/glances/bin/activate
   pip install --upgrade pip
@@ -824,15 +816,15 @@ install_glances_venv(){
   pip install fastapi
   pip install uvicorn
   pip install jinja2
-  #退出venv，退出venv后，pip重新指向系统Python，你的venv仍然保留，但不会影响其他操作。
+  # 退出 venv，退出 venv 后，pip 重新指向系统 Python，你的 venv 仍然保留，但不会影响其他操作。
   deactivate
   
-  #软链接Glances让其全局可用
-  #green "添加Glances到全局路径..."
-  #ln -sf /opt/glances/bin/glances /usr/local/bin/glances
-  #如使用glances -w --username --password命令创建用户名和密码是要用到，不然glances命令无法识别
+  # 软链接Glances让其全局可用
+  # green "添加Glances到全局路径..."
+  # ln -sf /opt/glances/bin/glances /usr/local/bin/glances
+  # 如使用 glances -w --username --password 命令创建用户名和密码是要用到，不然 glances 命令无法识别
 
-  #创建systemd服务文件
+  # 创建 systemd 服务文件
   green "创建 systemd 服务..."
 cat << EOF > /etc/systemd/system/glances.service
 [Unit]
@@ -847,66 +839,78 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-  #重新加载systemd并启动Glances
+  # 重新加载 systemd 并启动 Glances
   green "启动Glances..."
   systemctl daemon-reload
   systemctl enable glances.service
   systemctl start glances.service
-  #systemctl enable --now glances.service
-  #systemctl enable --now glances.service的作用
-  #这个命令等同于两步操作：
-  #systemctl enable glances.service   # 设置开机自启
-  #systemctl start glances.service    # 立即启动服务
-  #--now 选项表示同时启用（开机自启）并立即启动该服务。
+  # systemctl enable --now glances.service
+  # systemctl enable --now glances.service的作用
+  # 这个命令等同于两步操作：
+  # systemctl enable glances.service   # 设置开机自启
+  # systemctl start glances.service    # 立即启动服务
+  # --now 选项表示同时启用（开机自启）并立即启动该服务。
 
-  #获取PVEIP地址
+  # 获取PVEIP地址
   local PVE_IP=$(hostname -I | awk '{print $1}')
 
   green "Glances安装完成！"
   green "现在可以在HomeAssistant添加Glances监控PVE！"
   green "WebUI和API访问地址: http://$PVE_IP:61208"
   systemctl status glances.service
-  #如果以后不再需要Glances或其他Python软件，直接删除venv目录即可：
-  #systemctl stop glances.service
-  #systemctl disable glances.service
-  #rm -f /etc/systemd/system/glances.service
-  #rm -f /usr/local/bin/glances  #如果之前创建过glances命令的软链接，需要删除
-  #rm -rf /opt/glances
-  #systemctl daemon-reload
-  #这样就能完全清理掉Glances，而不会影响PVE系统、Python。
+  # 如果以后不再需要 Glances 或其他 Python 软件，直接删除 venv 目录即可：
+  # systemctl stop glances.service
+  # systemctl disable glances.service
+  # rm -f /etc/systemd/system/glances.service
+  # rm -f /usr/local/bin/glances  #如果之前创建过glances命令的软链接，需要删除
+  # rm -rf /opt/glances
+  # systemctl daemon-reload
+  # 这样就能完全清理掉 Glances，而不会影响PVE系统、Python。
 }
 
-#删除GLANCES硬件监控服务
+# 删除 GLANCES 硬件监控服务
 del_install_glances_venv(){
   systemctl stop glances.service
   systemctl disable glances.service
   rm -f /etc/systemd/system/glances.service
-  rm -f /usr/local/bin/glances  #如果之前创建过glances命令的软链接，需要删除
+  rm -f /usr/local/bin/glances  # 如果之前创建过glances命令的软链接，需要删除
   rm -rf /opt/glances
   systemctl daemon-reload
   green "删除完成"
 }
 
-#开始菜单
+# 开始菜单
 start_menu(){
   clear
-  green " ======================================="
+  echo "                                                              "
+  echo " __       __  __      __        _______   __     __  ________ "
+  echo "|  \     /  \|  \    /  \      |       \ |  \   |  \|        \"
+  echo "| $$\   /  $$ \$$\  /  $$      | $$$$$$$\| $$   | $$| $$$$$$$$"
+  echo "| $$$\ /  $$$  \$$\/  $$       | $$__/ $$| $$   | $$| $$__    "
+  echo "| $$$$\  $$$$   \$$  $$        | $$    $$ \$$\ /  $$| $$  \   "
+  echo "| $$\$$ $$ $$    \$$$$         | $$$$$$$   \$$\  $$ | $$$$$   "
+  echo "| $$ \$$$| $$    | $$          | $$         \$$ $$  | $$_____ "
+  echo "| $$  \$ | $$    | $$          | $$          \$$$   | $$     \"
+  echo " \$$      \$$     \$$           \$$           \$     \$$$$$$$$"
+  echo "                                                              "
+  echo "                                                              "
+  green " ============================================================"
   green " 介绍："
-  green " 一键配置PVE9系统综合脚本"
-  red " *仅供技术交流使用，本脚本开源，请勿用于商业用途！如有修改新增也行不吝开源！"
-  green " ======================================="
+  green " 一键配置 PVE9 系统综合脚本"
+  red " 仅供技术交流使用，本脚本开源，请勿用于商业用途！如有修改新增也请不吝开源！"
+  green " ============================================================"
   echo
-  green " 1. 设置web登录页默认语言为简体中文"
-  green " 2. 删除local_lvm"
+  green " 1. 设置 web 登录页默认语言为简体中文"
+  green " 2. 删除 local_lvm"
   green " 3. 取消无效订阅弹窗"
-  green " 4. PVE软件源更换"
-  green " 5. 更新pve系统"
-  green " 6. 更新pve系统且重启后执行系统清理程序"
-  green " 7. 开启intel核显SR-IOV虚拟化直通"
-  green " 8. 安装UPS监控软件NUT"
-  green " 9. 安装GLANCES硬件监控服务"
-  green " 10. 删除GLANCES硬件监控服务"
-  green " 11. PVE常用优化"
+  green " 4. PVE 软件源更换"
+  green " 5. 更新 pve 系统"
+  green " 6. 更新 pve 系统且重启后执行系统清理程序"
+  green " 7. 开启 intel 核显 SR-IOV 虚拟化直通"
+  green " 8. 安装 UPS 监控软件 NUT"
+  green " 9. 安装 GLANCES 硬件监控服务"
+  green " 10. 删除 GLANCES 硬件监控服务"
+  green " 11. PVE 常用优化"
   blue " 0. 退出脚本"
   echo
   read -p "请输入数字:" num
