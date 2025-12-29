@@ -121,6 +121,12 @@ delete_invalid_subscription_popup() {
   fi
   # [ ! -f "$bakjs" ] && cp "$jsfile" "$bakjs" # 简短写法，和if then 等价
   
+  # 检查是否已经修改过
+  if grep -q "void({ //Ext.Msg.show({" "$jsfile"; then
+    green "订阅弹窗已修改过，无需重复操作"
+    return 0
+  fi
+  
   # 修改取消弹窗
   sed -Ezi "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" "$jsfile"
   
@@ -151,6 +157,31 @@ change_source() {
   local bakproxmox="${proxmox_file}.bak"
   
   show_current_source   # 显示当前源状态
+  
+  # 如果 debian.sources 不存在，自动恢复
+  if [ ! -f "$sources_file" ]; then
+    if [ ! -f "$baksources" ]; then
+      yellow "检测到 debian.sources 已丢失且无备份，重新创建并写入官方基础源"
+      cat > "$sources_file" <<'EOF'
+# Types: deb deb-src
+Types: deb
+URIs: http://deb.debian.org/debian/
+Suites: trixie trixie-updates
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+# Types: deb deb-src
+Types: deb
+URIs: http://security.debian.org/debian-security/
+Suites: trixie-security
+Components: main non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+    else
+      yellow "检测到 debian.sources 已丢失但有备份，从备份文件恢复"
+      cp "$baksources" "$sources_file"
+    fi
+  fi
   
   # 仅第一次创建 PVE 源的备份
   if [ ! -f "$baksources" ]; then
@@ -183,24 +214,24 @@ EOF
   read -p "请输入数字 (0 或 1): " choice
   case "$choice" in
     0)
-	  green "使用官方源..."
-	  if [ -f "$baksources" ]; then
-	    cp "$baksources" "$sources_file"
-	    green "已恢复官方 debian.sources"
-	  else
-	    yellow "未找到备份文件，保持当前 debian.sources 不变"
-	  fi
-	  if [ -f "$bakproxmox" ]; then
-	    cp "$bakproxmox" "$proxmox_file"
-	    green "已恢复官方 proxmox.sources"
-	  else
-	    yellow "未找到备份文件，保持当前 proxmox.sources 不变"
-	  fi
+      green "使用官方源..."
+      if [ -f "$baksources" ]; then
+        cp "$baksources" "$sources_file"
+        green "已恢复官方 debian.sources"
+      else
+        yellow "未找到备份文件，保持当前 debian.sources 不变"
+      fi
+      if [ -f "$bakproxmox" ]; then
+        cp "$bakproxmox" "$proxmox_file"
+        green "已恢复官方 proxmox.sources"
+      else
+        yellow "未找到备份文件，保持当前 proxmox.sources 不变"
+      fi
       ;;
     1)
       green "使用中科大镜像源..."
-	  # Types: deb 软件包，Types: deb-src 源码包,用于源码下载自行编译场景，去掉源码 deb-src 包可提升 apt update 速度，下载更少索引文件
-	  cat > "$sources_file" <<'EOF'
+      # Types: deb 软件包，Types: deb-src 源码包,用于源码下载自行编译场景，去掉源码 deb-src 包可提升 apt update 速度，下载更少索引文件
+      cat > "$sources_file" <<'EOF'
 # Types: deb deb-src
 Types: deb
 URIs: https://mirrors.ustc.edu.cn/debian
@@ -215,7 +246,7 @@ Suites: trixie-security
 Components: main contrib non-free non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
-	  cat > "$proxmox_file" <<'EOF'
+      cat > "$proxmox_file" <<'EOF'
 Types: deb
 URIs: https://mirrors.ustc.edu.cn/proxmox/debian
 Suites: trixie
@@ -258,7 +289,7 @@ update_pve() {
   if [[ "$choice" == "y" ]]; then
     green "系统将在 2 秒后重启..."
     sleep 2
-	sync
+    sync
     reboot
   else
     blue "已取消，请稍后自行重启。"
@@ -559,19 +590,19 @@ update_microcode() {
   if dpkg -s "$mc_package" >/dev/null 2>&1; then
     package_ver=$(dpkg -s "$mc_package" | awk '/Version:/{print $2}')
     candidate_ver=$(apt-cache policy "$mc_package" | awk '/Candidate:/{print $2}')
-	green "$mc_package 已安装，包版本: $package_ver，候选版本: $candidate_ver"
-	# 判断是否需要升级
+    green "$mc_package 已安装，包版本: $package_ver，候选版本: $candidate_ver"
+    # 判断是否需要升级
     if dpkg --compare-versions "$package_ver" lt "$candidate_ver"; then
       yellow "检测到微码包有新版本，准备升级..."
-	  if apt install --only-upgrade -y "$mc_package"; then
-	    green "微码包升级成功"
-	  else
-	    red "微码包安装或更新失败，请检查网络或 APT 状态。"
-		return 1
-	  fi
+      if apt install --only-upgrade -y "$mc_package"; then
+        green "微码包升级成功"
+      else
+        red "微码包安装或更新失败，请检查网络或 APT 状态。"
+        return 1
+      fi
     else
       green "微码包已是最新版本，无需升级。"
-	  return 0
+      return 0
     fi
   else
     yellow "微码包未安装，准备安装 $mc_package..."
@@ -612,7 +643,7 @@ set_thp_madvise() {
   echo "当前 defrag 状态: $current_defrag"
   if [[ "$current_thp" =~ \[madvise\] && "$current_defrag" =~ \[madvise\] ]]; then
     green "THP 及其碎片整理 (Defrag) 已全部锁定为 madvise 模式，无需重复设置"
-	return 0
+    return 0
   fi
   
   # 2. 立即生效
@@ -641,7 +672,7 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
-	if systemctl enable --now set-thp-madvise.service; then
+    if systemctl enable --now set-thp-madvise.service; then
       green "持久化服务创建并启用成功"
     else
       red "systemd 持久化启用失败"
@@ -701,7 +732,7 @@ change_swa() {
     green "swappiness 已成功调整为 $current_swp 并已持久化。"
   else
     red "swappiness 调整失败，请手动检查系统设置。"
-	yellow "最终 swappiness: $current_swp"
+    yellow "最终 swappiness: $current_swp"
   fi
 }
 
@@ -712,7 +743,7 @@ enable_ssd_trim() {
     green "检测到 SSD 存储设备，正在配置 fstrim..."
   else
     yellow "未检测到 SSD 存储，跳过 TRIM 配置。"
-	return 0
+    return 0
   fi
   
   # 2. 检查并启用 fstrim.timer (持久化 + 立即启动)
@@ -720,9 +751,9 @@ enable_ssd_trim() {
     green "SSD TRIM 定时维护已启用并在运行中，无需修改。"
   else
     yellow "检测到 TRIM 定时器未运行，正在激活..."
-	if systemctl enable --now fstrim.timer >/dev/null 2>&1; then
-	  green "fstrim.timer 已成功激活并锁定开机自启。"
-	else
+    if systemctl enable --now fstrim.timer >/dev/null 2>&1; then
+      green "fstrim.timer 已成功激活并锁定开机自启。"
+    else
       red "fstrim.timer 激活失败，请检查系统日志。"
       # 如果这里失败了，没必要进行后续的物理回收，直接返回
       return 1
@@ -814,7 +845,7 @@ Kernel_opt() {
   set_thp_madvise
   change_swa
   enable_ssd_trim
-  set_cpu_performance
+  # set_cpu_performance
 }
 
 # 安装 GLANCES 硬件监控服务
