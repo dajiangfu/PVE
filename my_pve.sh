@@ -134,9 +134,9 @@ show_current_source() {
   local sources_file="/etc/apt/sources.list.d/debian.sources"
   local proxmox_file="/etc/apt/sources.list.d/proxmox.sources"
 
-  if grep -q "mirrors.ustc.edu.cn" "$sources_file" 2>/dev/null || grep -q "mirrors.ustc.edu.cn" "$proxmox_file" 2>/dev/null; then
+  if grep -q "mirrors.ustc.edu.cn" "$sources_file" >/dev/null 2>&1 || grep -q "mirrors.ustc.edu.cn" "$proxmox_file" >/dev/null 2>&1; then
     yellow "当前正在使用国内镜像源 (USTC) "
-  elif grep -q "debian.org" "$sources_file" 2>/dev/null; then
+  elif grep -q "debian.org" "$sources_file" >/dev/null 2>&1; then
     green "当前正在使用官方 PVE 源"
   else
     red "当前源未知或自定义源"
@@ -583,8 +583,8 @@ set_thp_madvise() {
     red "当前内核不支持 Transparent Huge Pages (THP)，跳过配置。"
     return 1
   fi
-  current_thp=$(cat "$thp_enabled" 2>/dev/null)
-  current_defrag=$(cat "$thp_defrag" 2>/dev/null)
+  current_thp=$(cat "$thp_enabled" >/dev/null 2>&1)
+  current_defrag=$(cat "$thp_defrag" >/dev/null 2>&1)
   echo "当前 enabled 状态: $current_thp"
   echo "当前 defrag 状态: $current_defrag"
   if [[ "$current_thp" =~ \[madvise\] && "$current_defrag" =~ \[madvise\] ]]; then
@@ -594,7 +594,7 @@ set_thp_madvise() {
   
   # 2. 立即生效
   yellow "正在将 THP 设置为 madvise 模式 (立即生效)..."
-  if echo madvise > "$thp_enabled" 2>/dev/null && echo madvise > "$thp_defrag" 2>/dev/null; then
+  if echo madvise > "$thp_enabled" >/dev/null 2>&1 && echo madvise > "$thp_defrag" >/dev/null 2>&1; then
     green "THP 及其碎片整理 (Defrag) 已立即锁定为 madvise 模式"
   else
     red "立即设置 THP 及其碎片整理 (Defrag) 失败，可能需要 root 权限"
@@ -628,8 +628,8 @@ EOF
   fi
 
   # 4. 显示当前状态
-  current_thp=$(cat "$thp_enabled" 2>/dev/null)
-  current_defrag=$(cat "$thp_defrag" 2>/dev/null)
+  current_thp=$(cat "$thp_enabled" >/dev/null 2>&1)
+  current_defrag=$(cat "$thp_defrag" >/dev/null 2>&1)
   echo "当前 enabled 状态: $current_thp"
   echo "当前 defrag 状态: $current_defrag"
   
@@ -662,7 +662,7 @@ change_swa() {
   fi
   
   # 持久化到配置文件
-  if echo "vm.swappiness = $target_swp" > "$conf_file" 2>/dev/null; then
+  if echo "vm.swappiness = $target_swp" > "$conf_file" >/dev/null 2>&1; then
     if sysctl -p "$conf_file" >/dev/null 2>&1; then
       green "swappiness 持久化成功"
     else
@@ -693,7 +693,7 @@ enable_ssd_trim() {
   fi
   
   # 2. 检查并启用 fstrim.timer (持久化 + 立即启动)
-  if systemctl is-active --quiet fstrim.timer 2>/dev/null && systemctl is-enabled --quiet fstrim.timer 2>/dev/null; then
+  if systemctl is-active --quiet fstrim.timer >/dev/null 2>&1 && systemctl is-enabled --quiet fstrim.timer >/dev/null 2>&1; then
     green "SSD TRIM 定时维护已启用并在运行中，无需修改。"
   else
     yellow "检测到 TRIM 定时器未运行，正在激活..."
@@ -746,7 +746,7 @@ set_cpu_performance() {
     yellow "正在将 CPU governor 设置为 $governor..."
     for cpu_path in $cpu_dir/cpu[0-9]*; do
         if [ -e "$cpu_path/cpufreq/scaling_governor" ]; then
-            echo "$governor" > "$cpu_path/cpufreq/scaling_governor" 2>/dev/null
+            echo "$governor" > "$cpu_path/cpufreq/scaling_governor" >/dev/null 2>&1
         fi
     done
 
@@ -882,6 +882,7 @@ del_install_glances_venv(){
 # 开始菜单
 start_menu(){
   clear
+  green " ============================================================="
   cat << 'EOF'
  __       __  __      __        _______   __     __  ________ 
 |  \     /  \|  \    /  \      |       \ |  \   |  \|        \
@@ -893,11 +894,10 @@ start_menu(){
 | $$  \$ | $$    | $$          | $$          \$$$   | $$     \
  \$$      \$$     \$$           \$$           \$     \$$$$$$$$
 EOF
-  green " ============================================================"
+  green " ============================================================="
   green " 介绍："
   green " 一键配置 PVE9 系统综合脚本"
-  red " 仅供技术交流使用，本脚本开源，请勿用于商业用途！如有修改新增也请不吝开源！"
-  green " ============================================================"
+  red " 仅供技术交流使用，本脚本开源，请勿用于商业用途！"
   echo
   green " 1. 设置 web 登录页默认语言为简体中文"
   green " 2. 删除 local_lvm"
@@ -912,7 +912,7 @@ EOF
   green " 11. PVE 常用优化"
   blue " 0. 退出脚本"
   echo
-  read -p "请输入数字:" num
+  read -p " 请输入数字:" num
   case "$num" in
   1)
   set_default_language_zh_CN
