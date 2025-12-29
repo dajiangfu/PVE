@@ -236,7 +236,7 @@ EOF
 update_pve() {
   local choice="n"
   # 检查你的 sources.list/sources.sources 文件，建议尽可能使用官方源不是替换的第三方源，如网络实在连不上官方源则使用第三方源
-  if ! apt update; then
+  if ! apt update -q; then
     red "存储库更新失败，请检查网络或 sources.list 配置或订阅密钥状态！"
     return 1
   fi
@@ -279,7 +279,7 @@ cleanup_pve() {
 install_intel_sr_iov_dkms() {
   local choice="n"
   # 克隆 DKMS repo 并做一些构建工作
-  apt update && apt install git sysfsutils pve-headers mokutil -y
+  apt update -q && apt install -y git sysfsutils pve-headers mokutil build-essential dkms
   rm -rf /usr/src/i915-sriov-dkms-*
   rm -rf /var/lib/dkms/i915-sriov-dkms
   rm -rf ~/i915-sriov-dkms*
@@ -293,7 +293,6 @@ install_intel_sr_iov_dkms() {
   # build-* 并不是一个官方推荐的安装方式，它可能会匹配到 大量不相关的软件
   # 不推荐 直接使用 build-*，因为它可能会安装许多你 不需要的构建工具，导致系统安装冗余包
   # 不建议使用 build-*，可能会安装不相关的包，占用磁盘空间并影响系统稳定性
-  apt install build-essential dkms -y
   cd ~/i915-sriov-dkms
   green "正在添加 DKMS 源码..."
   if ! dkms add .; then
@@ -397,7 +396,7 @@ install_intel_sr_iov_dkms() {
 
 # 安装 UPS 监控软件 NUT
 install_ups_nut() {
-  apt update
+  apt update -q
   apt install -y nut #nut包通常会安装一些常见的依赖包，如 nut-client、nut-server、nut-cgi、nut-scanner，因此你可能不需要手动安装这些组件。
   # 查看 UPS 设备硬件信息
   # nut-scanner # 需要用户交互，在扫描过程中可能会提示用户做出选择，这个命令用于扫描计算机上连接的 UPS 设备，检查系统是否能够识别和通信，它会尝试自动检测并列出所有可用的 UPS 设备。
@@ -534,7 +533,10 @@ update_microcode() {
   local cpu_vendor=$(awk -F': ' '/vendor_id/{print $2; exit}' /proc/cpuinfo)
   local mc_package=""
   local current_mc=""
-
+  local package_ver=""
+  local candidate_ver=""
+  
+  # 检测 CPU 类型
   if [[ "$cpu_vendor" == "GenuineIntel" ]]; then
     mc_package="intel-microcode"
     green "检测到 Intel CPU，准备更新微码..."
@@ -546,25 +548,45 @@ update_microcode() {
     return 1
   fi
   
-  apt update -qq
+  # 获取当前运行的微码版本
+  current_mc=$(grep microcode /proc/cpuinfo | awk '{print $3}' | head -n1)
+  green "当前运行中的微码版本: $current_mc"
+  
+  # 更新仓库索引
+  apt update -q
+  
+  # 检查包是否已安装
   if dpkg -s "$mc_package" >/dev/null 2>&1; then
-    green "$mc_package 已安装，尝试更新..."
-    apt upgrade -y "$mc_package"
+    package_ver=$(dpkg -s "$mc_package" | awk '/Version:/{print $2}')
+    candidate_ver=$(apt-cache policy "$mc_package" | awk '/Candidate:/{print $2}')
+	green "$mc_package 已安装，包版本: $package_ver，候选版本: $candidate_ver"
+	# 判断是否需要升级
+    if dpkg --compare-versions "$package_ver" lt "$candidate_ver"; then
+      yellow "检测到微码包有新版本，准备升级..."
+	  if apt install --only-upgrade -y "$mc_package"; then
+	    green "微码包升级成功"
+	  else
+	    red "微码包安装或更新失败，请检查网络或 APT 状态。"
+		return 1
+	  fi
+    else
+      green "微码包已是最新版本，无需升级。"
+	  return 0
+    fi
   else
-    yellow "正在安装 $mc_package..."
-    apt install -y "$mc_package"
+    yellow "微码包未安装，准备安装 $mc_package..."
+    if apt install -y "$mc_package"; then
+	  green "微码包升级成功"
+	else
+	  red "微码包安装或更新失败，请检查网络或 APT 状态。"
+      return 1
+	fi
   fi
-
-# 获取安装操作的退出状态
-  local status=$?
-  if [ $status -eq 0 ]; then
-    current_mc=$(grep microcode /proc/cpuinfo | awk '{print $3}' | head -n1)
-    green "操作成功。当前运行中的微码版本: $current_mc"
-    green "微码已写入系统 initrd 镜像，安装完成。"
-    yellow "提示：必须【重启物理机】才能将新微码加载进 CPU 硬件。"
-  else
-    red "微码包安装或更新失败，请检查网络或 APT 状态。"
-  fi
+  
+  # 获取升级后的 CPU 微码版本（未重启前可能不会变化）
+  current_mc=$(grep microcode /proc/cpuinfo | awk '{print $3}' | head -n1)
+  green "升级后的微码版本: $current_mc"
+  yellow "提示：必须【重启物理机】才能将新微码加载进 CPU 硬件。"
 }
 
 # THP（Transparent Huge Pages）设置为 madvise 智能模式，对不需要的程序默认关闭，对需要的程序开启
@@ -802,7 +824,7 @@ install_glances_venv(){
 
   # 安装 Python 和 venv
   green "安装Python及venv..."
-  apt update
+  apt update -q
   apt install -y python3 python3-pip python3-venv lm-sensors
 
   # 创建 venv
