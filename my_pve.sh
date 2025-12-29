@@ -496,6 +496,7 @@ install_ups_nut() {
   upsc tgbox850@localhost
 }
 
+# 禁用 KSM
 close_ksm() {
   green "正在禁用 KSM (内核内存共享)..."
 
@@ -583,8 +584,8 @@ set_thp_madvise() {
     red "当前内核不支持 Transparent Huge Pages (THP)，跳过配置。"
     return 1
   fi
-  current_thp=$(cat "$thp_enabled" >/dev/null 2>&1)
-  current_defrag=$(cat "$thp_defrag" >/dev/null 2>&1)
+  current_thp=$(cat "$thp_enabled")
+  current_defrag=$(cat "$thp_defrag")
   echo "当前 enabled 状态: $current_thp"
   echo "当前 defrag 状态: $current_defrag"
   if [[ "$current_thp" =~ \[madvise\] && "$current_defrag" =~ \[madvise\] ]]; then
@@ -594,7 +595,7 @@ set_thp_madvise() {
   
   # 2. 立即生效
   yellow "正在将 THP 设置为 madvise 模式 (立即生效)..."
-  if echo madvise > "$thp_enabled" >/dev/null 2>&1 && echo madvise > "$thp_defrag" >/dev/null 2>&1; then
+  if echo madvise > "$thp_enabled" 2>/dev/null && echo madvise > "$thp_defrag" 2>/dev/null; then
     green "THP 及其碎片整理 (Defrag) 已立即锁定为 madvise 模式"
   else
     red "立即设置 THP 及其碎片整理 (Defrag) 失败，可能需要 root 权限"
@@ -628,8 +629,8 @@ EOF
   fi
 
   # 4. 显示当前状态
-  current_thp=$(cat "$thp_enabled" >/dev/null 2>&1)
-  current_defrag=$(cat "$thp_defrag" >/dev/null 2>&1)
+  current_thp=$(cat "$thp_enabled")
+  current_defrag=$(cat "$thp_defrag")
   echo "当前 enabled 状态: $current_thp"
   echo "当前 defrag 状态: $current_defrag"
   
@@ -662,7 +663,7 @@ change_swa() {
   fi
   
   # 持久化到配置文件
-  if echo "vm.swappiness = $target_swp" > "$conf_file" >/dev/null 2>&1; then
+  if echo "vm.swappiness = $target_swp" > "$conf_file"; then
     if sysctl -p "$conf_file" >/dev/null 2>&1; then
       green "swappiness 持久化成功"
     else
@@ -746,7 +747,7 @@ set_cpu_performance() {
     yellow "正在将 CPU governor 设置为 $governor..."
     for cpu_path in $cpu_dir/cpu[0-9]*; do
         if [ -e "$cpu_path/cpufreq/scaling_governor" ]; then
-            echo "$governor" > "$cpu_path/cpufreq/scaling_governor" >/dev/null 2>&1
+            echo "$governor" > "$cpu_path/cpufreq/scaling_governor" 2>/dev/null
         fi
     done
 
