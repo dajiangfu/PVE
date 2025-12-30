@@ -952,6 +952,7 @@ Infreq_used() {
   echo
   green " 1. 安装 GLANCES 硬件监控服务"
   green " 2. 删除 GLANCES 硬件监控服务"
+  blue " 0. 返回上级菜单"
   echo
   yellow_n " 请输入数字选择你想要的执行项(0-2):"
   read num
@@ -1050,7 +1051,7 @@ EOF
   4)
   change_source
   sleep 1s
-  read -s -n1 -p "按任意键返回上级菜单 ... "
+  read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
   ;;
   5)
@@ -1068,23 +1069,23 @@ EOF
   7)
   install_intel_sr_iov_dkms
   sleep 1s
-  read -s -n1 -p "按任意键返回上级菜单 ... "
+  read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
   ;;
   8)
   install_ups_nut
   sleep 1s
-  read -s -n1 -p "按任意键返回上级菜单 ... "
+  read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
   ;;
   9)
-  Infreq_used
+  Kernel_opt
   sleep 1s
-  read -s -n1 -p "按任意键返回上级菜单 ... "
+  read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
   ;;
   10)
-  Kernel_opt
+  Infreq_used
   sleep 1s
   read -s -n1 -p "按任意键返回上级菜单 ... "
   start_menu
