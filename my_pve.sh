@@ -135,28 +135,17 @@ delete_invalid_subscription_popup() {
   green "执行完成后，浏览器Ctrl+F5强制刷新缓存"
 }
 
-# 检查当前源状态
-show_current_source() {
-  local sources_file="/etc/apt/sources.list.d/debian.sources"
-  local proxmox_file="/etc/apt/sources.list.d/proxmox.sources"
-
-  if grep -q "mirrors.ustc.edu.cn" "$sources_file" >/dev/null 2>&1 || grep -q "mirrors.ustc.edu.cn" "$proxmox_file" >/dev/null 2>&1; then
-    yellow "当前正在使用国内镜像源 (USTC) "
-  elif grep -q "debian.org" "$sources_file" >/dev/null 2>&1; then
-    green "当前正在使用官方 PVE 源"
-  else
-    red "当前源未知或自定义源"
-  fi
-}
-
 # PVE 软件源更换
 change_source() {
   local sources_file="/etc/apt/sources.list.d/debian.sources"
   local baksources="${sources_file}.bak"
   local proxmox_file="/etc/apt/sources.list.d/proxmox.sources"
   local bakproxmox="${proxmox_file}.bak"
+  local choice="n"
   
-  show_current_source   # 显示当前源状态
+  # PVE9 起删除旧的 .list 文件（如有）
+  rm -f /etc/apt/sources.list >/dev/null 2>&1
+  rm -f /etc/apt/sources.list.d/*.list >/dev/null 2>&1
   
   # 如果 debian.sources 不存在，自动恢复
   if [ ! -f "$sources_file" ]; then
@@ -177,37 +166,58 @@ Suites: trixie-security
 Components: main non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
-    else
+      # 仅第一次创建基础源的备份，以锁定官方基础源的备份
+	  cp "$sources_file" "$baksources"
+	else
       yellow "检测到 debian.sources 已丢失但有备份，从备份文件恢复"
       cp "$baksources" "$sources_file"
     fi
+  else
+    if grep -q "debian.org" "$sources_file" >/dev/null 2>&1; then
+      green "当前正在使用官方基础源"
+	  # 仅第一次创建基础源的备份，以锁定官方基础源的备份
+      if [ ! -f "$baksources" ]; then
+        cp "$sources_file" "$baksources"
+      fi
+    else
+      yellow "当前正在使用镜像基础源"
+    fi
   fi
-  
-  # 仅第一次创建 PVE 源的备份
-  if [ ! -f "$baksources" ]; then
-    cp "$sources_file" "$baksources"
-  fi
-  
-  # PVE9 起删除旧的 .list 文件（如有）
-  rm -f /etc/apt/sources.list
-  rm -f /etc/apt/sources.list.d/*.list
   
   # 强烈建议先删除企业源
   rm -f /etc/apt/sources.list.d/pve-enterprise.sources
-  # 然后配置免订阅存储库 pve-no-subscription
-  # 仅第一次创建 PVE 源的备份
-  if [ ! -f "$bakproxmox" ]; then
-    cat > "$proxmox_file" <<'EOF'
+  # 然后配置免订阅存储库 pve-no-subscription ↓↓↓
+  
+  # 如果 proxmox_file.sources 不存在，自动恢复
+  if [ ! -f "$proxmox_file" ]; then
+    if [ ! -f "$bakproxmox" ]; then
+      yellow "检测到 proxmox.sources 已丢失且无备份，重新创建并写入官方免订阅源"
+      cat > "$proxmox_file" <<'EOF'
 Types: deb
 URIs: http://download.proxmox.com/debian/pve
 Suites: trixie
 Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
 EOF
-    cp "$proxmox_file" "$bakproxmox"
+      # 仅第一次创建免订阅源的备份，以锁定官方免订阅源的备份
+	  cp "$proxmox_file" "$bakproxmox"
+    else
+      yellow "检测到 proxmox.sources 已丢失但有备份，从备份文件恢复"
+      cp "$bakproxmox" "$proxmox_file"
+    fi
+  else
+    if grep -q "download.proxmox.com" "$proxmox_file" >/dev/null 2>&1; then
+      green "当前正在使用官方免订阅源"
+	  # 仅第一次创建免订阅源的备份，以锁定官方免订阅源的备份
+      if [ ! -f "$bakproxmox" ]; then
+        cp "$proxmox_file" "$bakproxmox"
+      fi
+    else
+      yellow "当前正在使用镜像免订阅源"
+    fi
   fi
   
-  yellow "准备替换 $sources_file 中的内容..."
+  yellow "准备替换 $sources_file 和 $proxmox_file 中的内容..."
   green "请选择要使用的 PVE 源版本："
   green "0) 官方源，本系统默认官方源，需网络支持"
   green "1) 镜像源，国内用户，网络访问受限者选择"
@@ -360,11 +370,6 @@ install_intel_sr_iov_dkms() {
   yellow "1. 请输入一个临时密码（至少8位）。"
   yellow "2. 在PVE重启时的显示器启动界面依次选择Enroll MOK--->Continue--->Yes--->password(输入之前设置的MOK密码回车)--->Reboot"
   mokutil --import /var/lib/dkms/mok.pub
-  
-  # 获取 PVE 版本号（去掉无关信息）
-  # local PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d' ' -f1 | cut -d'-' -f1)#此命令也可用，但较冗长
-  local PVE_VERSION=$(pveversion | cut -d'/' -f2 | cut -d'-' -f1)
-  echo "当前 PVE 版本: $PVE_VERSION"
   
   # Proxmox GRUB 配置，Proxmox 的默认安装使用 GRUB 引导加载程序
   # module_blacklist=xe 是黑名单 xe 驱动，避免系统自动切换为 xe 驱动，i915 驱动更成熟，且 istoreos 中也是 i915 驱动
@@ -607,11 +612,11 @@ update_microcode() {
   else
     yellow "微码包未安装，准备安装 $mc_package..."
     if apt install -y "$mc_package"; then
-	  green "微码包升级成功"
-	else
-	  red "微码包安装或更新失败，请检查网络或 APT 状态。"
+      green "微码包升级成功"
+    else
+      red "微码包安装或更新失败，请检查网络或 APT 状态。"
       return 1
-	fi
+    fi
   fi
   
   # 获取升级后的 CPU 微码版本（未重启前可能不会变化）
@@ -935,6 +940,19 @@ del_install_glances_venv(){
 
 # 开始菜单
 start_menu(){
+  clear
+  
+  # 获取 PVE 版本号
+  # local PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d' ' -f1 | cut -d'-' -f1)#此命令也可用，但较冗长
+  local PVE_VERSION=$(pveversion | cut -d'/' -f2 | cut -d'-' -f1)
+  green "当前 PVE 版本: $PVE_VERSION"
+  #版本比较，判断是否版本低于 9.0.0
+  if dpkg --compare-versions "$PVE_VERSION" "lt" "9.0.0"; then
+    red "抱歉！当前版本低于 9.0.0，此脚本不适用，自动退出。。。"
+	sleep 1
+    exit 0
+  fi
+  
   clear
   green " ============================================================="
   cat << 'EOF'
