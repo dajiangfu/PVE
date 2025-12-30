@@ -14,6 +14,10 @@ red() {
 yellow() {
   echo -e "\033[33m\033[01m$1\033[0m"
 }
+# 不换行输出写法，增加 -n
+yellow_n() {
+  echo -e -n "\033[33m\033[01m$1\033[0m"
+}
 
 # 旋转动效函数
 spinner() {
@@ -167,15 +171,15 @@ Components: main non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
       # 仅第一次创建基础源的备份，以锁定官方基础源的备份
-	  cp "$sources_file" "$baksources"
-	else
+      cp "$sources_file" "$baksources"
+    else
       yellow "检测到 debian.sources 已丢失但有备份，从备份文件恢复"
       cp "$baksources" "$sources_file"
     fi
   else
     if grep -q "debian.org" "$sources_file" >/dev/null 2>&1; then
       green "当前正在使用官方基础源"
-	  # 仅第一次创建基础源的备份，以锁定官方基础源的备份
+      # 仅第一次创建基础源的备份，以锁定官方基础源的备份
       if [ ! -f "$baksources" ]; then
         cp "$sources_file" "$baksources"
       fi
@@ -200,7 +204,7 @@ Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
 EOF
       # 仅第一次创建免订阅源的备份，以锁定官方免订阅源的备份
-	  cp "$proxmox_file" "$bakproxmox"
+      cp "$proxmox_file" "$bakproxmox"
     else
       yellow "检测到 proxmox.sources 已丢失但有备份，从备份文件恢复"
       cp "$bakproxmox" "$proxmox_file"
@@ -208,7 +212,7 @@ EOF
   else
     if grep -q "download.proxmox.com" "$proxmox_file" >/dev/null 2>&1; then
       green "当前正在使用官方免订阅源"
-	  # 仅第一次创建免订阅源的备份，以锁定官方免订阅源的备份
+      # 仅第一次创建免订阅源的备份，以锁定官方免订阅源的备份
       if [ ! -f "$bakproxmox" ]; then
         cp "$proxmox_file" "$bakproxmox"
       fi
@@ -941,20 +945,18 @@ del_install_glances_venv(){
 # 开始菜单
 start_menu(){
   clear
-  
   # 获取 PVE 版本号
   # local PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d' ' -f1 | cut -d'-' -f1)#此命令也可用，但较冗长
   local PVE_VERSION=$(pveversion | cut -d'/' -f2 | cut -d'-' -f1)
   #版本比较，判断是否版本低于 9.0.0
   if dpkg --compare-versions "$PVE_VERSION" "lt" "9.0.0"; then
     red "抱歉！当前版本 $PVE_VERSION 低于 9.0.0，此脚本不适用，自动退出。。。"
-	sleep 1
+    sleep 1
     exit 0
   fi
+  clear
   green "当前 PVE 版本: $PVE_VERSION"
   local num
-  
-  clear
   green " ============================================================="
   cat << 'EOF'
  __       __  __      __        _______   __     __  ________ 
@@ -970,7 +972,7 @@ EOF
   green " ============================================================="
   green " 介绍："
   green " 一键配置 PVE9 系统综合脚本"
-  green " 由沅编写并保持开源~"
+  green " 此脚本由沅编写并保持开源~"
   red " 仅供技术交流使用，本脚本开源，请勿用于商业用途！"
   echo
   green " 1. 设置 web 登录页默认语言为简体中文"
@@ -987,7 +989,7 @@ EOF
   blue " 0. 退出脚本"
   echo
   # read -p " 请输入数字选择你想要的执行项(0-11):" num
-  yellow " 请输入数字选择你想要的执行项(0-11):"
+  yellow_n " 请输入数字选择你想要的执行项(0-11):"
   read num
   case "$num" in
   1)
