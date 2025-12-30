@@ -287,7 +287,7 @@ update_pve() {
   fi
 
   green "升级软件包..."
-  if ! apt full-upgrade; then
+  if ! apt full-upgrade -y; then
     red "软件包升级失败，请检查错误日志！"
     return 1
   fi
@@ -942,6 +942,44 @@ del_install_glances_venv(){
   green "删除完成"
 }
 
+# 不常用功能安装
+Infreq_used() {
+  clear
+  local num
+  green " ============================================================="
+  green " 以下为不常用功能，可根据需要自行选择安装"
+  green " ============================================================="
+  echo
+  green " 1. 安装 GLANCES 硬件监控服务"
+  green " 2. 删除 GLANCES 硬件监控服务"
+  echo
+  yellow_n " 请输入数字选择你想要的执行项(0-2):"
+  read num
+  case "$num" in
+  1)
+  install_glances_venv
+  sleep 1s
+  read -s -n1 -p "按任意键返回菜单 ... "
+  Infreq_used
+  ;;
+  2)
+  del_install_glances_venv
+  sleep 1s
+  read -s -n1 -p "按任意键返回菜单 ... "
+  Infreq_used
+  ;;
+  0)
+  return 0
+  ;;
+  *)
+  clear
+  red "请输入正确数字(0-2)"
+  sleep 1s
+  Infreq_used
+  ;;
+  esac
+}
+
 # 开始菜单
 start_menu(){
   clear
@@ -955,8 +993,8 @@ start_menu(){
     exit 0
   fi
   clear
-  green "当前 PVE 版本: $PVE_VERSION"
   local num
+  green "当前 PVE 版本: $PVE_VERSION"
   green " ============================================================="
   cat << 'EOF'
  __       __  __      __        _______   __     __  ________ 
@@ -983,13 +1021,12 @@ EOF
   green " 6. 更新 pve 系统且重启后执行系统清理程序"
   green " 7. 开启 intel 核显 SR-IOV 虚拟化直通"
   green " 8. 安装 UPS 监控软件 NUT"
-  green " 9. 安装 GLANCES 硬件监控服务"
-  green " 10. 删除 GLANCES 硬件监控服务"
-  green " 11. PVE 常用优化"
+  green " 9. PVE 常用优化"
+  green " 10. 不常用功能安装"
   blue " 0. 退出脚本"
   echo
-  # read -p " 请输入数字选择你想要的执行项(0-11):" num
-  yellow_n " 请输入数字选择你想要的执行项(0-11):"
+  # read -p " 请输入数字选择你想要的执行项(0-10):" num
+  yellow_n " 请输入数字选择你想要的执行项(0-10):"
   read num
   case "$num" in
   1)
@@ -1041,18 +1078,12 @@ EOF
   start_menu
   ;;
   9)
-  install_glances_venv
+  Infreq_used
   sleep 1s
   read -s -n1 -p "按任意键返回上级菜单 ... "
   start_menu
   ;;
   10)
-  del_install_glances_venv
-  sleep 1s
-  read -s -n1 -p "按任意键返回上级菜单 ... "
-  start_menu
-  ;;
-  11)
   Kernel_opt
   sleep 1s
   read -s -n1 -p "按任意键返回上级菜单 ... "
@@ -1063,7 +1094,7 @@ EOF
   ;;
   *)
   clear
-  red "请输入正确数字"
+  red "请输入正确数字(0-10)"
   sleep 1s
   start_menu
   ;;
