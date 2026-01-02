@@ -735,14 +735,13 @@ update_microcode() {
 }
 
 # THP（Transparent Huge Pages）设置为 madvise 智能模式，对不需要的程序默认关闭，对需要的程序开启
+# 通常 PVE9 安装后 THP 默认已经是 madvise 智能模式
 set_thp_madvise() {
   local thp_enabled="/sys/kernel/mm/transparent_hugepage/enabled"
   local thp_defrag="/sys/kernel/mm/transparent_hugepage/defrag"
   local current_thp=""
   local current_defrag=""
   local sysfs_line=""
-  
-  apt-get update -q && apt-get install -y sysfsutils
   
   # 1. 检查 THP 是否存在
   if [ ! -f "$thp_enabled" ] || [ ! -f "$thp_defrag" ]; then
@@ -759,6 +758,7 @@ set_thp_madvise() {
   fi
   
   # 2. 创建持久化服务
+  apt-get update -q && apt-get install -y sysfsutils
   yellow "正在通过 sysfsutils 配置 THP madvise..."
   sysfs_line="kernel/mm/transparent_hugepage/enabled = madvise"
   grep -qxF "$sysfs_line" /etc/sysfs.conf || printfn "$sysfs_line" >> /etc/sysfs.conf
@@ -828,6 +828,7 @@ change_swa() {
 }
 
 # PVE9 宿主机开启 SSD TRIM 优化（针对 ext4/LVM 等文件系统）
+# 通常 PVE9 安装后固态硬盘已经开启了 TRIM
 enable_ssd_trim() {
   local start_time=""
   local end_time=""
@@ -891,6 +892,7 @@ enable_ssd_trim() {
 }
 
 # 设置 CPU governor 为 performance 模式（开机自启）
+# 通常 PVE9 安装后所有 CPU 模式默认已经是 performance
 set_cpu_performance() {
   local governor="performance"
   local cpu_dir="/sys/devices/system/cpu"
@@ -899,8 +901,6 @@ set_cpu_performance() {
   local need_change=false
   local sysfs_line=""
   local core_name=""
-  
-  apt-get update -q && apt-get install -y sysfsutils
   
   # 0. 检测是否已经全部是 $governor
   # 使用 sort -V 处理 i5-13500 的 20 个核心排序，按照 0-19 而不是 0 1 10 11...19 2...9 这样
@@ -921,6 +921,7 @@ set_cpu_performance() {
   fi
   
   # 1. 创建持久化服务
+  apt-get update -q && apt-get install -y sysfsutils
   yellow "正在通过 sysfsutils 配置 CPU 为 $governor 模式..."
   for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
     if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
