@@ -7,26 +7,46 @@
 # printfn() {
 #   printf "%s\n" "$1"
 # }
+# blue() {
+#   printf "\033[34m\033[01m%s\033[0m\n" "$1"
+# }
+# green() {
+#   printf "\033[32m\033[01m%s\033[0m\n" "$1"
+# }
+# red() {
+#   printf "\033[31m\033[01m%s\033[0m\n" "$1"
+# }
+# yellow() {
+#   printf "\033[33m\033[01m%s\033[0m\n" "$1"
+# }
+# # 不换行输出写法，增加 -n
+# yellow_n() {
+#   printf "\033[33m\033[01m%s\033[0m" "$1"
+# }
+
 printfn() {
   local IFS=" "
   printf "%s\n" "$*"
 }
-
 blue() {
-  printf "\033[34m\033[01m%s\033[0m\n" "$1"
+  local IFS=" "
+  printf "\033[34m\033[01m%s\033[0m\n" "$*"
 }
 green() {
-  printf "\033[32m\033[01m%s\033[0m\n" "$1"
+  local IFS=" "
+  printf "\033[32m\033[01m%s\033[0m\n" "$*"
 }
 red() {
-  printf "\033[31m\033[01m%s\033[0m\n" "$1"
+  local IFS=" "
+  printf "\033[31m\033[01m%s\033[0m\n" "$*"
 }
 yellow() {
-  printf "\033[33m\033[01m%s\033[0m\n" "$1"
+  local IFS=" "
+  printf "\033[33m\033[01m%s\033[0m\n" "$*"
 }
 # 不换行输出写法，增加 -n
 yellow_n() {
-  printf "\033[33m\033[01m%s\033[0m" "$1"
+  printf "\033[33m\033[01m%s\033[0m" "$*"
 }
 
 # 旋转动效函数
