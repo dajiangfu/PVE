@@ -2,21 +2,27 @@
 
 # 注意：本脚本只针对 PVE9 编写，专用于 PVE9
 
+# printfn 实现printf+\n的效果，也就是和echo效果一样，输出字符串后在后面自动输出\n换行符
+# 比如 echo "$content" > "$cfg" 就可以写成 printfn "$content" > "$cfg"
+printfn() {
+  printf "%s\n" "$1"
+}
+
 blue() {
-  echo -e "\033[34m\033[01m$1\033[0m"
+  printf "\033[34m\033[01m%s\033[0m\n" "$1"
 }
 green() {
-  echo -e "\033[32m\033[01m$1\033[0m"
+  printf "\033[32m\033[01m%s\033[0m\n" "$1"
 }
 red() {
-  echo -e "\033[31m\033[01m$1\033[0m"
+  printf "\033[31m\033[01m%s\033[0m\n" "$1"
 }
 yellow() {
-  echo -e "\033[33m\033[01m$1\033[0m"
+  printf "\033[33m\033[01m%s\033[0m\n" "$1"
 }
 # 不换行输出写法，增加 -n
 yellow_n() {
-  echo -e -n "\033[33m\033[01m$1\033[0m"
+  printf "\033[33m\033[01m%s\033[0m" "$1"
 }
 
 # 旋转动效函数
@@ -39,7 +45,7 @@ spinner() {
 # 设置 web 登录页默认语言为简体中文
 set_default_language_zh_CN() {
   local cfg="/etc/pve/datacenter.cfg"
-  local tmp_file
+  local content
 
   # 文件不存在：直接失败
   if [ ! -f "$cfg" ]; then
@@ -48,28 +54,33 @@ set_default_language_zh_CN() {
   fi
 
   # 已经是 zh_CN，直接返回（幂等）
-  if grep -q '^[[:space:]]*language:[[:space:]]*zh_CN' "$cfg"; then
+  if grep -qE '^[[:space:]]*language:[[:space:]]*zh_CN' "$cfg"; then
     green "PVE 默认语言已是 zh_CN，无需修改"
     return 0
   fi
 
+  # 修改或添加配置，使用内存变量处理，避免操作 pmxcfs 时产生过多的磁盘/集群同步动作
   if grep -q '^[[:space:]]*language:' "$cfg"; then
-    tmp_file=$(mktemp) || return 1
-    if sed 's/^[[:space:]]*language:.*/language: zh_CN/' "$cfg" > "$tmp_file"; then
-      cat "$tmp_file" > "$cfg"
-      rm -f "$tmp_file"
-    else
-      rm -f "$tmp_file"
-      red "错误：语言设置失败"
-      return 1
-    fi
+    # 已有 language 配置项，替换现有行
+    content=$(sed 's/^[[:space:]]*language:.*/language: zh_CN/' "$cfg")
   else
-    echo 'language: zh_CN' >> "$cfg"
+    # 无 language 配置项，智能追加
+    content=$(cat "$cfg")
+    # 如果内容不为空且最后一个字符不是换行符，则补齐换行符
+    if [[ -n "$content" && "${content: -1}" != $'\n' ]]; then
+      content+=$'\n'
+    fi
+    content+="language: zh_CN"
   fi
-  
-  green "PVE 默认语言已设置为 zh_CN（刷新 Web 即可生效）"
-}
 
+  # 4. 回写文件 (保持原子性和权限)
+  if printfn "$content" > "$cfg"; then
+    green "PVE 默认语言已设置为 zh_CN（刷新 Web 即可生效）"
+  else
+    red "错误：无法写入 $cfg"
+    return 1
+  fi
+}
 
 # 删除 local_lvm
 # PVE 安装好后的第一件事就是删除 local-lvm 分区
@@ -113,17 +124,10 @@ delete_local_lvm() {
   green "local-lvm 已成功合并至 root"
 }
 
-
 # 取消无效订阅弹窗
 delete_invalid_subscription_popup() {
   local jsfile="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
   local bakjs="${jsfile}.bak"
-  
-  # 仅第一次创建备份
-  if [ ! -f "$bakjs" ]; then
-    cp "$jsfile" "$bakjs"
-  fi
-  # [ ! -f "$bakjs" ] && cp "$jsfile" "$bakjs" # 简短写法，和if then 等价
   
   # 检查是否已经修改过
   if grep -q "void({ //Ext.Msg.show({" "$jsfile"; then
@@ -131,15 +135,23 @@ delete_invalid_subscription_popup() {
     return 0
   fi
   
-  # 修改取消弹窗
-  sed -Ezi "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" "$jsfile"
+  # 备份原始文件，如果升级了，jsfile 会变回原样，我们需要重新备份
+  cp "$jsfile" "$bakjs"
   
-  # 重启服务
-  systemctl restart pveproxy.service
-  green "执行完成后，浏览器Ctrl+F5强制刷新缓存"
+  # 修改取消弹窗
+  # 匹配：包含 No valid subscription 的 Ext.Msg.show({
+  # 将 Ext.Msg.show({ 替换为：void({ //Ext.Msg.show({
+  yellow "正在修改 JS 文件以禁用订阅弹窗..."
+  if sed -Ezi "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" "$jsfile"; then
+    # 重启服务
+    systemctl restart pveproxy.service
+    green "订阅弹窗逻辑已禁用，如果 PVE 界面还有弹窗，记得按 Ctrl+F5 强制刷新，因为浏览器会缓存这个 JS 文件"
+  else
+    red "错误：JS 修改失败"
+  fi
 }
 
-# PVE 软件源更换
+# PVE 软件源更换，建议尽可能使用官方源不是镜像源，如网络实在连不上官方源则使用第三方源
 change_source() {
   local sources_file="/etc/apt/sources.list.d/debian.sources"
   local baksources="${sources_file}.bak"
@@ -244,7 +256,7 @@ EOF
       ;;
     1)
       green "使用中科大镜像源..."
-      # Types: deb 软件包，Types: deb-src 源码包,用于源码下载自行编译场景，去掉源码 deb-src 包可提升 apt update 速度，下载更少索引文件
+      # Types: deb 软件包，Types: deb-src 源码包,用于源码下载自行编译场景，去掉源码 deb-src 包可提升 apt-get update 速度，下载更少索引文件
       cat > "$sources_file" <<'EOF'
 # Types: deb deb-src
 Types: deb
@@ -277,28 +289,98 @@ EOF
   green "替换完成！"
 }
 
+# 更新系统后执行系统清理程序，包含清理旧内核，只保留当前使用的和备用最新的这两个内核
+# Jordan Hillis 的 pvekclean脚本的精华浓缩版
+cleanup_pve() {
+  local current_k=$(uname -r)
+  local boot_free_before=$(df -m / | awk 'NR==2 {print $4}') # 获取当前根分区剩余空间 (MB)
+  local boot_free_after=0
+  local saved_space=0
+  local k_list=""
+  local to_remove=""
+  local count=0
+  local confirm=""
+  local pkg=""
+  
+  yellow "启动系统深度维护程序..."
+  
+  # 1. APT 缓存瘦身
+  green "清理 APT 下载缓存..."
+  apt-get autoclean -y >/dev/null 2>&1
+  apt-get clean -y >/dev/null 2>&1
+  
+  # 2. 内核精准净化 (兼容 PVE 7/8/9)
+  green "检索冗余内核..."
+  # 匹配 pve-kernel (旧) 和 proxmox-kernel (新)
+  k_list=$(dpkg-query -W -f='${Package}\n' | grep -E "^(pve|proxmox)-kernel-[0-9]" | grep -vE "series|transitional|$current_k" | sort -V)
+  if [ -n "$k_list" ] && [ $(echo "$k_list" | wc -l) -gt 1 ]; then
+    # 核心逻辑：保留列表最后一个（最新版），剩下的全部加入删除清单
+    to_remove=$(echo "$k_list" | head -n -1)
+    count=$(echo "$to_remove" | wc -l)
+    yellow "发现 $count 个可清理内核。将保留当前运行核($current_k)及一个备份核。"
+    echo "$to_remove" | sed 's/^/  [待卸载] /'
+    read -p "确认执行深度卸载并刷新引导？[y/N]: " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      for pkg in $to_remove; do
+        green "正在净化: $pkg"
+        apt-get purge -y "$pkg" >/dev/null 2>&1
+      done
+      green "正在更新 GRUB 引导菜单..."
+      update-grub >/dev/null 2>&1
+      green "内核卸载及 GRUB 刷新完成"
+    else
+      green "已跳过内核卸载步骤"
+    fi
+  else
+    green "内核环境已是精简状态，无需处理"
+  fi
+  
+  # 3. 彻底清理孤立的依赖（包含 Headers）
+  green "清理残留头文件与孤立依赖..."
+  apt-get autoremove --purge -y >/dev/null 2>&1
+  
+  # 4. 统计
+  boot_free_after=$(df -m / | awk 'NR==2 {print $4}')
+  saved_space=$((boot_free_after - boot_free_before))
+  if [ "$saved_space" -gt 0 ]; then
+    green "清理完毕！共释放空间: ${saved_space}MB"
+  else
+    green "系统已处于最佳状态，未发现可清理的冗余文件。"
+  fi
+}
+# cleanup_pve() {
+#   # 清理本地缓存中过期的 .deb 包（存放在 /var/cache/apt/archives）
+#   green "清理 APT 缓存..."
+#   apt-get autoclean
+#   # 检查系统中不再被任何已安装软件依赖的包
+#   green "以下包将被移除（不包含当前内核）："
+#   apt-get autoremove --purge --dry-run | grep -v "$(uname -r)"
+#   # 执行清理
+#   yellow "开始执行系统清理..."
+#   apt-get autoremove --purge -y
+# }
+
 # 更新 pve 系统
 update_pve() {
   local choice="n"
-  # 检查你的 sources.list/sources.sources 文件，建议尽可能使用官方源不是替换的第三方源，如网络实在连不上官方源则使用第三方源
-  if ! apt update -q; then
+  if ! apt-get update -q; then
     red "存储库更新失败，请检查网络或 sources.list 配置或订阅密钥状态！"
     return 1
   fi
 
   green "升级软件包..."
-  if ! apt full-upgrade -y; then
+  if ! apt-get full-upgrade -y; then
     red "软件包升级失败，请检查错误日志！"
     return 1
   fi
   
-  # 清理本地缓存中过期的 .deb 包（存放在 /var/cache/apt/archives）
-  apt autoclean
-  green "注意要在重启后运行此脚本中的更新pve系统且重启后执行系统清理程序！"
+  # 更新系统后执行系统清理程序，包含清理旧内核，只保留当前使用的和备用最新的这两个内核
+  cleanup_pve
+  green "可在重启后再次运行更新系统后执行系统清理程序"
   
   # 询问用户是否重启
   read -p "已更新完毕，是否重启系统？请输入 [Y/n]: " choice
-  choice=$(echo "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
+  choice=$(printf "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
   [ -z "${choice}" ] && choice="y"
   if [[ "$choice" == "y" ]]; then
     green "系统将在 2 秒后重启..."
@@ -310,49 +392,63 @@ update_pve() {
   fi
 }
 
-# 更新 pve 系统且重启后执行系统清理程序
-cleanup_pve() {
-  # 清理本地缓存中过期的 .deb 包（存放在 /var/cache/apt/archives）
-  apt autoclean
-  # 检查系统中不再被任何已安装软件依赖的包
-  apt autoremove --purge --dry-run | grep -v "$(uname -r)"
-  # 执行清理
-  apt autoremove --purge
-}
-
 # 开启 intel 核显 SR-IOV 虚拟化直通
 install_intel_sr_iov_dkms() {
   local choice="n"
+  local VERSION=""
+  local repo_url="https://github.com/strongtz/i915-sriov-dkms.git"
+  local modules=""
+  local m=""
+  local vga_id=""
+  local sysfs_line=""
+  
+  apt-get update -q && apt-get install -y git sysfsutils pve-headers mokutil build-essential dkms
+  
+  VERSION=$(dkms status i915-sriov-dkms | awk -F'[,/:]' '{print $2}' | tr -d '[:space:]' | sort -u)
+  # VERSION 检查变量是否为空
+  if [ -n "$VERSION" ]; then
+    # 循环遍历并删除
+    printfn "$VERSION" | while read -r v; do
+      [ -z "$v" ] && continue  # 跳过空行
+      yellow "正在彻底移除 i915-sriov-dkms 版本: $v ..."
+      dkms remove -m i915-sriov-dkms -v "$v" --all
+    done
+    green "所有已记录的 DKMS 版本已清理完毕。"
+  else
+    blue "未发现任何已安装的 i915-sriov-dkms 版本，跳过移除步骤。"
+  fi
+  # find /lib/modules -regex ".*/updates/dkms/i915.ko" -delete # 删除模块文件 (.ko)
+  # 手动 find -delete 删除了 .ko 文件，内核的 modules.dep 索引里可能还残留着该模块的信息，导致系统在启动时尝试加载一个不存在的文件而报 Error
+  rm -rf /usr/src/i915-sriov-dkms-* # 清理源码目录
+  rm -rf /var/lib/dkms/i915-sriov-dkms # 清理数据库残留
+  rm -rf ~/i915-sriov-dkms* # 清理用户目录下的克隆代码
+  
   # 克隆 DKMS repo 并做一些构建工作
-  apt update -q && apt install -y git sysfsutils pve-headers mokutil build-essential dkms
-  rm -rf /usr/src/i915-sriov-dkms-*
-  rm -rf /var/lib/dkms/i915-sriov-dkms
-  rm -rf ~/i915-sriov-dkms*
-  # find /lib/modules -regex ".*/updates/dkms/i915.ko" -delete # 只删除了模块文件 (.ko)，DKMS 数据库和源码目录未删除，dkms status 仍显示安装；可能导致内核模块状态不一致
-  dkms remove -m i915-sriov-dkms --all || true # 相对于 find -delete，DKMS 机制保证内核和模块状态一致，不误删，删除的更干净
-
   cd ~
-  git clone https://github.com/strongtz/i915-sriov-dkms.git
-  # apt install build-* dkms
+  git clone "$repo_url"
+  # apt-get install build-* dkms
   # build-* 是 通配符匹配，它会安装所有以 build- 开头的包，这可能包括大量不必要的软件。
   # build-* 并不是一个官方推荐的安装方式，它可能会匹配到 大量不相关的软件
   # 不推荐 直接使用 build-*，因为它可能会安装许多你 不需要的构建工具，导致系统安装冗余包
   # 不建议使用 build-*，可能会安装不相关的包，占用磁盘空间并影响系统稳定性
   cd ~/i915-sriov-dkms
+  # 从 dkms.conf 文件中自动提取版本号
+  VERSION=$(grep "PACKAGE_VERSION=" dkms.conf | sed -E 's/.*="([^"]+)".*/\1/')
+  # 将源码同步到系统标准位置，确保长期稳定
+  mkdir -p /usr/src/i915-sriov-dkms-"$VERSION"
+  cp -rf . /usr/src/i915-sriov-dkms-"$VERSION"
+  chown -R root:root /usr/src/i915-sriov-dkms-"$VERSION"
+  chmod -R 755 /usr/src/i915-sriov-dkms-"$VERSION"
   green "正在添加 DKMS 源码..."
-  if ! dkms add .; then
+  # 将原来的 dkms add . 替换为显式指定 dkms add -m i915-sriov-dkms -v "$VERSION"
+  if ! dkms add -m i915-sriov-dkms -v "$VERSION"; then
     red "DKMS 添加失败，退出！"
     return 1
   fi
-
+  
   # 构建新内核并检查状态。验证它是否显示已安装
-  # local VERSION=$(dkms status -m i915-sriov-dkms -k $(uname -r) | awk -F'[,/]' '/installed/{print $2; exit}')
-  # if [ -z "$VERSION" ]; then
-    # red "无法获取 i915-sriov-dkms 版本，退出！"
-    # return 1
-  # fi
   green "正在为内核 $(uname -r) 编译并安装驱动..."
-  if ! dkms install i915-sriov-dkms -k "$(uname -r)" --force; then
+  if ! dkms install -m i915-sriov-dkms -v "$VERSION" -k "$(uname -r)" --force; then
     red "DKMS 安装失败！请检查以下内容："
     red "1. 是否已安装 build-essential 和 dkms"
     red "2. 是否有足够的磁盘空间"
@@ -382,17 +478,17 @@ install_intel_sr_iov_dkms() {
   sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3 module_blacklist=xe initcall_blacklist=sysfb_init"' /etc/default/grub
   
   # 加载内核模块:
-  # echo -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" >> /etc/modules # 此命令会造成重复追加，废除
-  local modules=("vfio" "vfio_iommu_type1" "vfio_pci" "vfio_virqfd")
+  # printfn -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" >> /etc/modules # 此命令会造成重复追加，废除
+  modules=("vfio" "vfio_iommu_type1" "vfio_pci" "vfio_virqfd")
   for m in "${modules[@]}"; do
-      grep -qxF "$m" /etc/modules || echo "$m" >> /etc/modules
+      grep -qxF "$m" /etc/modules || printfn "$m" >> /etc/modules
   done
 
   # 完成 PCI 配置
   # 现在我们需要找到 VGA 卡位于哪个 PCIe 总线上。通常 VGA 总线 ID 为 00:02.0
   # 获取 VGA 设备的 PCIe 总线号
-  # local vga_id=$(lspci | grep VGA | awk '{print $1}') # 此命令会造成多个 vga_id 被赋值到一起
-  local vga_id=$(lspci | grep VGA | awk '{print $1}' | head -n1) # 取第一行物理 GPU 的 vga_id，因为物理 GPU 的vga_id 是 .0 地址总是在最前面，VF 的 vga_id 是从 .1 开始的
+  # vga_id=$(lspci | grep VGA | awk '{print $1}') # 此命令会造成多个 vga_id 被赋值到一起
+  vga_id=$(lspci | grep VGA | awk '{print $1}' | head -n1) # 取第一行物理 GPU 的 vga_id，因为物理 GPU 的vga_id 是 .0 地址总是在最前面，VF 的 vga_id 是从 .1 开始的
 
   #确保成功获取 vga_id
   if [ -z "$vga_id" ]; then
@@ -401,16 +497,19 @@ install_intel_sr_iov_dkms() {
   fi
 
   # 生成 sysfs 配置
-  # echo "devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3" > /etc/sysfs.conf # 此命令会造成重复追加，废除
-  local sysfs_line="devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3"
+  # printfn "devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3" > /etc/sysfs.conf # 此命令会造成重复追加，废除
+  # sysfs_line="devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3"
+  local full_path=$(find /sys/devices/pci* -name "*$vga_id" -type d | head -n 1 | sed 's|/sys/||')
+  sysfs_line="$full_path/sriov_numvfs = 3"
   touch /etc/sysfs.conf
-  grep -qxF "$sysfs_line" /etc/sysfs.conf || echo "$sysfs_line" >> /etc/sysfs.conf
+  grep -qxF "$sysfs_line" /etc/sysfs.conf || printfn "$sysfs_line" >> /etc/sysfs.conf
   systemctl enable sysfsutils
 
   # 输出结果
-  echo "已写入 /etc/sysfs.conf，内容如下："
-  # cat 该文件并确保它已被修改
-  cat /etc/sysfs.conf
+  printfn "已写入 /etc/sysfs.conf，内容如下："
+  # 匹配丢弃所有以 # 开头的行。这样就过滤掉所有注释行和空白行，只显示文件中“真正有效”的内容
+  grep -v '^#' /etc/sysfs.conf | grep -v '^$'
+  # cat /etc/sysfs.conf # cat 该文件显示里面所有内容，如果你想看到注释内容可以用这条命令
   
   # 应用修改
   update-grub
@@ -423,11 +522,12 @@ install_intel_sr_iov_dkms() {
   # 硬件里面添加 PCI 设备可选择虚拟出来的几个 SR-IOV 核显，注意要记得勾选主 GPU 和 PCI-Express，显示设置为 VirtlO-GPU，这样控制台才有画面
   # 询问用户是否重启
   read -p "已设置完毕，是否重启系统？请输入 [Y/n]: " choice
-  choice=$(echo "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
+  choice=$(printf "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
   [ -z "${choice}" ] && choice="y"
   if [[ "$choice" == "y" ]]; then
     green "系统将在 2 秒后重启..."
     sleep 2
+    sync
     reboot
   else
     blue "已取消，请稍后自行重启。"
@@ -436,20 +536,34 @@ install_intel_sr_iov_dkms() {
 
 # 安装 UPS 监控软件 NUT
 install_ups_nut() {
-  apt update -q
-  apt install -y nut #nut包通常会安装一些常见的依赖包，如 nut-client、nut-server、nut-cgi、nut-scanner，因此你可能不需要手动安装这些组件。
+  local BASE_URL=""
+  local DEST_DIR=""
+  local FILES=""
+  local FILE=""
+  local UPSD_USERS_FILE="/etc/nut/upsd.users"
+  local UPSMON_CONF_FILE="/etc/nut/upsmon.conf"
+  # 新/旧用户名和密码
+  local OLD_USERNAME="monusername"
+  local OLD_PASSWORD="mima"
+  local NEW_USERNAME="monusername"
+  local NEW_PASSWORD="mima"
+  local ESCAPED_NEW_USERNAME=""
+  local ESCAPED_NEW_PASSWORD=""
+  
+  apt-get update -q
+  apt-get install -y nut # nut 包通常会安装一些常见的依赖包，如 nut-client、nut-server、nut-cgi、nut-scanner，因此你可能不需要手动安装这些组件。
   # 查看 UPS 设备硬件信息
   # nut-scanner # 需要用户交互，在扫描过程中可能会提示用户做出选择，这个命令用于扫描计算机上连接的 UPS 设备，检查系统是否能够识别和通信，它会尝试自动检测并列出所有可用的 UPS 设备。
   nut-scanner -U # -U 选项用于使扫描器以 "不带用户交互" 的方式运行，会自动执行扫描，不会要求用户输入任何内容，适合自动化操作。
   green "安装NUT完成！下面进行配置"
   # GitHub 文件路径
-  local BASE_URL="https://raw.githubusercontent.com/dajiangfu/PVE/main/nut"
+  BASE_URL="https://raw.githubusercontent.com/dajiangfu/PVE/main/nut"
   
   # 目标目录
-  local DEST_DIR="/etc/nut"
+  DEST_DIR="/etc/nut"
   
   # 文件列表
-  local FILES=("nut.conf" "ups.conf" "upsd.conf" "upsd.users" "upsmon.conf" "upssched.conf" "upssched-cmd")
+  FILES=("nut.conf" "ups.conf" "upsd.conf" "upsd.users" "upsmon.conf" "upssched.conf" "upssched-cmd")
   
   # 确保目标目录存在
   if [ ! -d "$DEST_DIR" ]; then
@@ -458,7 +572,6 @@ install_ups_nut() {
   fi
   
   # 下载文件并保存到 /etc/nut 目录
-  local FILE
   for FILE in "${FILES[@]}"; do
     green "下载 $FILE..."
     curl -fsSL -o "$DEST_DIR/$FILE" "$BASE_URL/$FILE" || {
@@ -467,15 +580,6 @@ install_ups_nut() {
     }
   done
   green "所有文件已下载并保存到 $DEST_DIR."
-  
-  local UPSD_USERS_FILE="/etc/nut/upsd.users"
-  local UPSMON_CONF_FILE="/etc/nut/upsmon.conf"
-  
-  # 旧的用户名和密码
-  local OLD_USERNAME="monusername"
-  local OLD_PASSWORD="mima"
-  local NEW_USERNAME="monusername"
-  local NEW_PASSWORD="mima"
   
   # 提示用户输入新的用户名和密码，如果用户直接按回车（什么都不输入），变量就会自动被赋值为默认值
   read -p "请输入新的 NUT 监控用户名 [默认: monusername]: " NEW_USERNAME
@@ -487,7 +591,7 @@ install_ups_nut() {
     green "-> 用户名已自定义。"
   fi
   read -sp "请输入新的密码 [默认: mima]: " NEW_PASSWORD
-  echo ""
+  printfn ""
   # 如果输入为空，设置默认值并给用户提示
   if [ -z "$NEW_PASSWORD" ]; then
     NEW_PASSWORD="mima"
@@ -501,8 +605,8 @@ install_ups_nut() {
   cp "$UPSMON_CONF_FILE" "$UPSMON_CONF_FILE.bak"
   
   # 对用户名和密码进行转义，避免特殊字符导致 sed 出错
-  local ESCAPED_NEW_USERNAME=$(printf '%s\n' "$NEW_USERNAME" | sed 's/[\/&]/\\&/g')
-  local ESCAPED_NEW_PASSWORD=$(printf '%s\n' "$NEW_PASSWORD" | sed 's/[\/&]/\\&/g')
+  ESCAPED_NEW_USERNAME=$(printf '%s\n' "$NEW_USERNAME" | sed 's/[\/&]/\\&/g')
+  ESCAPED_NEW_PASSWORD=$(printf '%s\n' "$NEW_PASSWORD" | sed 's/[\/&]/\\&/g')
   # 使用 sed 替换用户名和密码
   sed -i "s#$OLD_USERNAME#$ESCAPED_NEW_USERNAME#g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
   sed -i "s#$OLD_PASSWORD#$ESCAPED_NEW_PASSWORD#g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
@@ -537,11 +641,13 @@ install_ups_nut() {
 
 # 禁用 KSM
 close_ksm() {
+  local services=""
+  local svc=""
+  local ksm_status=""
+  
   green "正在禁用 KSM (内核内存共享)..."
-
   # 1. 禁用服务层（ksmtuned 是 PVE 自动调节 KSM 的守护进程）
-  local services=("ksmtuned" "ksm")
-  local svc
+  services=("ksmtuned" "ksm")
   for svc in "${services[@]}"; do
     if systemctl list-unit-files | grep -q "^$svc.service"; then
       systemctl disable --now "$svc" >/dev/null 2>&1
@@ -550,12 +656,12 @@ close_ksm() {
 
   # 2. 内核层禁用
   # 停止 KSM 扫描
-  echo 0 > /sys/kernel/mm/ksm/run
+  printf 0 > /sys/kernel/mm/ksm/run
   # 将扫描页数设为 0 以节省微量 CPU
-  echo 0 > /sys/kernel/mm/ksm/pages_to_scan
+  printf 0 > /sys/kernel/mm/ksm/pages_to_scan
 
   # 3. 验证状态
-  local ksm_status=$(cat /sys/kernel/mm/ksm/run)
+  ksm_status=$(cat /sys/kernel/mm/ksm/run)
   if [ "$ksm_status" -eq 0 ]; then
     green "KSM 已成功禁用 (当前内核状态: $ksm_status)"
   else
@@ -593,7 +699,7 @@ update_microcode() {
   green "当前运行中的微码版本: $current_mc"
   
   # 更新仓库索引
-  apt update -q
+  apt-get update -q
   
   # 检查包是否已安装
   if dpkg -s "$mc_package" >/dev/null 2>&1; then
@@ -603,7 +709,7 @@ update_microcode() {
     # 判断是否需要升级
     if dpkg --compare-versions "$package_ver" lt "$candidate_ver"; then
       yellow "检测到微码包有新版本，准备升级..."
-      if apt install --only-upgrade -y "$mc_package"; then
+      if apt-get install --only-upgrade -y "$mc_package"; then
         green "微码包升级成功"
       else
         red "微码包安装或更新失败，请检查网络或 APT 状态。"
@@ -615,7 +721,7 @@ update_microcode() {
     fi
   else
     yellow "微码包未安装，准备安装 $mc_package..."
-    if apt install -y "$mc_package"; then
+    if apt-get install -y "$mc_package"; then
       green "微码包升级成功"
     else
       red "微码包安装或更新失败，请检查网络或 APT 状态。"
@@ -625,7 +731,7 @@ update_microcode() {
   
   # 获取升级后的 CPU 微码版本（未重启前可能不会变化）
   current_mc=$(grep microcode /proc/cpuinfo | awk '{print $3}' | head -n1)
-  green "升级后的微码版本: $current_mc"
+  green "升级后的微码版本: $current_mc (需重启刷新版本号)"
   yellow "提示：必须【重启物理机】才能将新微码加载进 CPU 硬件。"
 }
 
@@ -633,68 +739,45 @@ update_microcode() {
 set_thp_madvise() {
   local thp_enabled="/sys/kernel/mm/transparent_hugepage/enabled"
   local thp_defrag="/sys/kernel/mm/transparent_hugepage/defrag"
-  local service_file="/etc/systemd/system/set-thp-madvise.service"
   local current_thp=""
   local current_defrag=""
-
+  local sysfs_line=""
+  
+  apt-get update -q && apt-get install -y sysfsutils
+  
   # 1. 检查 THP 是否存在
-  if [ ! -e "$thp_enabled" ]; then
-    red "当前内核不支持 Transparent Huge Pages (THP)，跳过配置。"
-    return 1
-  fi
-  if [ ! -e "$thp_defrag" ]; then
-    red "当前内核不支持 Transparent Huge Pages (THP)，跳过配置。"
+  if [ ! -f "$thp_enabled" ] || [ ! -f "$thp_defrag" ]; then
+    red "当前内核不支持 THP，跳过配置。"
     return 1
   fi
   current_thp=$(cat "$thp_enabled")
   current_defrag=$(cat "$thp_defrag")
-  echo "当前 enabled 状态: $current_thp"
-  echo "当前 defrag 状态: $current_defrag"
+  printfn "当前 enabled 状态: $current_thp"
+  printfn "当前 defrag 状态: $current_defrag"
   if [[ "$current_thp" =~ \[madvise\] && "$current_defrag" =~ \[madvise\] ]]; then
     green "THP 及其碎片整理 (Defrag) 已全部锁定为 madvise 模式，无需重复设置"
     return 0
   fi
   
-  # 2. 立即生效
-  yellow "正在将 THP 设置为 madvise 模式 (立即生效)..."
-  if echo madvise > "$thp_enabled" 2>/dev/null && echo madvise > "$thp_defrag" 2>/dev/null; then
-    green "THP 及其碎片整理 (Defrag) 已立即锁定为 madvise 模式"
-  else
-    red "立即设置 THP 及其碎片整理 (Defrag) 失败，可能需要 root 权限"
-  fi
-
-  # 3. 创建持久化 systemd 服务
-  if [ ! -f "$service_file" ]; then
-    yellow "正在创建 THP madvise 持久化服务..."
-    cat > "$service_file" <<EOF
-[Unit]
-Description=Set Transparent Huge Pages to madvise
-After=systemd-modules-load.service
-Before=pve-guests.service
-
-[Service]
-Type=oneshot
-ExecStart=/bin/sh -c '/bin/echo madvise > $thp_enabled || true; /bin/echo madvise > $thp_defrag || true'
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    systemctl daemon-reload
-    if systemctl enable --now set-thp-madvise.service; then
-      green "持久化服务创建并启用成功"
-    else
-      red "systemd 持久化启用失败"
-    fi
-  else
-    green "THP 持久化服务已存在，保持不变"
-  fi
-
-  # 4. 显示当前状态
+  # 2. 创建持久化服务
+  yellow "正在通过 sysfsutils 配置 THP madvise..."
+  sysfs_line="kernel/mm/transparent_hugepage/enabled = madvise"
+  grep -qxF "$sysfs_line" /etc/sysfs.conf || printfn "$sysfs_line" >> /etc/sysfs.conf
+  sysfs_line="kernel/mm/transparent_hugepage/defrag = madvise"
+  grep -qxF "$sysfs_line" /etc/sysfs.conf || printfn "$sysfs_line" >> /etc/sysfs.conf
+  systemctl enable sysfsutils
+  green "sysfsutils 配置 THP madvise并启用成功"
+  # 输出结果
+  printfn "已写入 /etc/sysfs.conf，内容如下："
+  # 匹配丢弃所有以 # 开头的行。这样就过滤掉所有注释行和空白行，只显示文件中“真正有效”的内容
+  grep -v '^#' /etc/sysfs.conf | grep -v '^$'
+  # cat /etc/sysfs.conf # cat 该文件显示里面所有内容，如果你想看到注释内容可以用这条命令
+  
+  # 3. 显示当前状态
   current_thp=$(cat "$thp_enabled")
   current_defrag=$(cat "$thp_defrag")
-  echo "当前 enabled 状态: $current_thp"
-  echo "当前 defrag 状态: $current_defrag"
+  printfn "当前 enabled 状态: $current_thp"
+  printfn "当前 defrag 状态: $current_defrag"
   
   if [[ "$current_thp" =~ \[madvise\] && "$current_defrag" =~ \[madvise\] ]]; then
     green "THP 及其碎片整理 (Defrag) 已全部锁定为 madvise 模式(持久化已开启)"
@@ -709,7 +792,7 @@ change_swa() {
   local target_swp=10  # 建议设为 10，这是更具性能导向的 PVE 常用值
   local conf_file="/etc/sysctl.d/99-pve-swappiness.conf"
   
-  echo "当前 swappiness: $current_swp"
+  printfn "当前 swappiness: $current_swp"
   if [ "$current_swp" -le 20 ]; then
     green "swappiness 配置合理（适合 PVE 宿主机）"
     return 0
@@ -718,14 +801,14 @@ change_swa() {
   yellow "swappiness 偏高，调整为 $target_swp"
   
   # 立即修改内核运行参数
-  if sysctl -w vm.swappiness=$target_swp >/dev/null 2>&1; then
+  if sysctl -w vm.swappiness="$target_swp" >/dev/null 2>&1; then
     green "内核 swappiness 已调整为 $target_swp"
   else
     red "内核 swappiness 调整失败"
   fi
   
   # 持久化到配置文件
-  if echo "vm.swappiness = $target_swp" > "$conf_file"; then
+  if printfn "vm.swappiness = $target_swp" > "$conf_file"; then
     if sysctl -p "$conf_file" >/dev/null 2>&1; then
       green "swappiness 持久化成功"
     else
@@ -747,6 +830,13 @@ change_swa() {
 
 # PVE9 宿主机开启 SSD TRIM 优化（针对 ext4/LVM 等文件系统）
 enable_ssd_trim() {
+  local start_time=""
+  local end_time=""
+  local log_file=""
+  local trim_pid=""
+  local exit_code=""
+  local duration=""
+  
   # 1. 检测是否存在非机械硬盘设备
   if lsblk -d -o ROTA | grep -q "0"; then
     green "检测到 SSD 存储设备，正在配置 fstrim..."
@@ -760,7 +850,8 @@ enable_ssd_trim() {
     green "SSD TRIM 定时维护已启用并在运行中，无需修改。"
   else
     yellow "检测到 TRIM 定时器未运行，正在激活..."
-    if systemctl enable --now fstrim.timer >/dev/null 2>&1; then
+    systemctl enable fstrim.timer >/dev/null 2>&1
+    if systemctl restart fstrim.timer >/dev/null 2>&1; then
       green "fstrim.timer 已成功激活并锁定开机自启。"
     else
       red "fstrim.timer 激活失败，请检查系统日志。"
@@ -772,79 +863,91 @@ enable_ssd_trim() {
   # 3. 立即执行一次物理 TRIM 回收（带旋转动效）
   # -a: 所有挂载点, -v: 显示详细回收了多少空间
   yellow "正在执行即时空间回收 (fstrim -av) 这可能需要几十秒，请稍候..."
-  local start_time=$(date +%s)
-  local log_file="/tmp/fstrim_result.log"
+  start_time=$(date +%s)
+  log_file="/tmp/fstrim_result.log"
   # 将 fstrim 放到后台运行
   fstrim -av > "$log_file" 2>&1 &
-  local trim_pid=$!
+  trim_pid=$!
   
   # 调用动效函数，传入 fstrim 的进程 ID
   spinner "$trim_pid"
   
   # 任务完成后获取结果
   wait "$trim_pid"
-  local exit_code=$?
-  local end_time=$(date +%s)
-  local duration=$((end_time - start_time))
-    
-  if [ $exit_code -eq 0 ]; then
-    cat "$log_file" | while read -r line; do green "  -> $line"; done
+  exit_code=$?
+  end_time=$(date +%s)
+  duration=$((end_time - start_time))
+  
+  if [ "$exit_code" -eq 0 ]; then
+    cat "$log_file" | while read -r line; do
+      green "  -> $line";
+    done
     green "空间回收完成，总耗时: ${duration}s"
   else
     red "手动 TRIM 失败，请确认底层存储是否支持 discard"
     cat "$log_file"
   fi
-
+  
   rm -f "$log_file"
 }
 
-# 设置 CPU governor 为 performance 模式（立即生效 + 开机自启）
-# 待优化，需要先检测是否已经是performance，是的话就取消操作，不是就继续设置
+# 设置 CPU governor 为 performance 模式（开机自启）
 set_cpu_performance() {
-    local governor="performance"
-    local cpu_dir="/sys/devices/system/cpu"
-    local service_file="/etc/systemd/system/set-cpu-performance.service"
-
-    # 1. 立即生效
-    yellow "正在将 CPU governor 设置为 $governor..."
-    for cpu_path in $cpu_dir/cpu[0-9]*; do
-        if [ -e "$cpu_path/cpufreq/scaling_governor" ]; then
-            echo "$governor" > "$cpu_path/cpufreq/scaling_governor" 2>/dev/null
-        fi
-    done
-
-    green "CPU governor 已立即设置为 $governor"
-
-    # 2. 创建持久化 systemd 服务
-    if [ ! -f "$service_file" ]; then
-        yellow "创建持久化 systemd 服务..."
-        cat > "$service_file" <<EOF
-[Unit]
-Description=Set CPU governor to performance
-After=systemd-modules-load.service
-
-[Service]
-Type=oneshot
-ExecStart=/bin/sh -c 'for cpu in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor; do echo $governor > \$cpu || true; done'
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-        systemctl daemon-reload
-        systemctl enable --now set-cpu-performance.service
-        green "CPU governor 持久化服务创建并启用成功"
-    else
-        green "CPU governor 持久化服务已存在，无需修改"
+  local governor="performance"
+  local cpu_dir="/sys/devices/system/cpu"
+  local cpu_path=""
+  local current_gov=""
+  local need_change=false
+  local sysfs_line=""
+  local core_name=""
+  
+  apt-get update -q && apt-get install -y sysfsutils
+  
+  # 0. 检测是否已经全部是 $governor
+  # 使用 sort -V 处理 i5-13500 的 20 个核心排序，按照 0-19 而不是 0 1 10 11...19 2...9 这样
+  # for cpu_path in $(ls -d "$cpu_dir"/cpu[0-9]* 2>/dev/null | sort -V); do
+  for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
+    if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
+      current_gov=$(cat "$cpu_path/cpufreq/scaling_governor" 2>/dev/null)
+      if [ "$current_gov" != "$governor" ]; then
+        need_change=true
+        break
+      fi
     fi
-
-    # 3. 显示当前所有 CPU governor 状态
-    echo "当前 CPU governor 状态:"
-    for cpu_path in $cpu_dir/cpu[0-9]*; do
-        if [ -e "$cpu_path/cpufreq/scaling_governor" ]; then
-            echo "  $(basename $cpu_path): $(cat $cpu_path/cpufreq/scaling_governor)"
-        fi
-    done
+  done
+    
+  if [ "$need_change" = false ]; then
+    green "所有 CPU governor 已是 $governor，跳过设置"
+    return 0
+  fi
+  
+  # 1. 创建持久化服务
+  yellow "正在通过 sysfsutils 配置 CPU 为 $governor 模式..."
+  for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
+    if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
+      core_name=$(basename "$cpu_path")
+      sysfs_line="devices/system/cpu/$core_name/cpufreq/scaling_governor = $governor"
+      # 检查并追加
+      grep -qxF "$sysfs_line" /etc/sysfs.conf || printfn "$sysfs_line" >> /etc/sysfs.conf
+    fi
+  done
+  systemctl enable sysfsutils
+  green "sysfsutils 配置 CPU 为 $governor 模式并启用成功"
+  # 输出结果
+  printfn "已写入 /etc/sysfs.conf，内容如下："
+  # 匹配丢弃所有以 # 开头的行。这样就过滤掉所有注释行和空白行，只显示文件中“真正有效”的内容
+  grep -v '^#' /etc/sysfs.conf | grep -v '^$'
+  # cat /etc/sysfs.conf # cat 该文件显示里面所有内容，如果你想看到注释内容可以用这条命令
+  
+  # 2. 显示状态
+  printfn "当前 CPU governor 状态:"
+  # cat /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor
+  for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
+    if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
+      # 使用 basename 提取 cpu0, cpu1 等字样
+      printfn "  $(basename "$cpu_path"): $(cat "$cpu_path/cpufreq/scaling_governor")"
+    fi
+  done
 }
 
 # PVE 常用优化，一键执行多项
@@ -854,18 +957,19 @@ Kernel_opt() {
   set_thp_madvise
   change_swa
   enable_ssd_trim
-  # set_cpu_performance
+  set_cpu_performance
 }
 
 # 安装 GLANCES 硬件监控服务
 install_glances_venv(){
+  local PVE_IP=""
   # 设置Glances安装目录
   # GLANCES_DIR="/opt/glances"  # 调用使用$GLANCES_DIR
 
   # 安装 Python 和 venv
   green "安装Python及venv..."
-  apt update -q
-  apt install -y python3 python3-pip python3-venv lm-sensors
+  apt-get update -q
+  apt-get install -y python3 python3-pip python3-venv lm-sensors
 
   # 创建 venv
   green "创建Python虚拟环境..."
@@ -891,7 +995,7 @@ install_glances_venv(){
   green "创建 systemd 服务..."
 cat << EOF > /etc/systemd/system/glances.service
 [Unit]
-Description=$DESCRIPTION
+Description=Glances Monitoring Service
 After=network.target
 
 [Service]
@@ -906,16 +1010,16 @@ EOF
   green "启动Glances..."
   systemctl daemon-reload
   systemctl enable glances.service
-  systemctl start glances.service
+  systemctl restart glances.service
   # systemctl enable --now glances.service
   # systemctl enable --now glances.service的作用
   # 这个命令等同于两步操作：
   # systemctl enable glances.service   # 设置开机自启
-  # systemctl start glances.service    # 立即启动服务
+  # systemctl restart glances.service    # 立即启动服务
   # --now 选项表示同时启用（开机自启）并立即启动该服务。
 
   # 获取PVEIP地址
-  local PVE_IP=$(hostname -I | awk '{print $1}')
+  PVE_IP=$(hostname -I | awk '{print $1}')
 
   green "Glances安装完成！"
   green "现在可以在HomeAssistant添加Glances监控PVE！"
@@ -944,17 +1048,17 @@ del_install_glances_venv(){
 
 # 不常用功能安装
 Infreq_used() {
-  clear
   local num
-  green " ============================================================="
-  green " 以下为不常用功能，可根据需要自行选择安装"
-  green " ============================================================="
-  echo
-  green " 1. 安装 GLANCES 硬件监控服务"
-  green " 2. 删除 GLANCES 硬件监控服务"
-  blue " 0. 返回上级菜单"
-  echo
-  yellow_n " 请输入数字选择你想要的执行项(0-2):"
+  clear
+  green "============================================================="
+  green "以下为不常用功能，可根据需要自行选择安装"
+  green "============================================================="
+  printfn
+  green "1. 安装 GLANCES 硬件监控服务"
+  green "2. 删除 GLANCES 硬件监控服务"
+  blue "0. 返回上级菜单"
+  printfn
+  yellow_n "请输入数字选择你想要的执行项(0-2):"
   read num
   case "$num" in
   1)
@@ -983,6 +1087,7 @@ Infreq_used() {
 
 # 开始菜单
 start_menu(){
+  local num
   clear
   # 获取 PVE 版本号
   # local PVE_VERSION=$(pveversion | awk '{print $1}' | cut -d'/' -f2 | cut -d' ' -f1 | cut -d'-' -f1)#此命令也可用，但较冗长
@@ -991,12 +1096,15 @@ start_menu(){
   if dpkg --compare-versions "$PVE_VERSION" "lt" "9.0.0"; then
     red "抱歉！当前版本 $PVE_VERSION 低于 9.0.0，此脚本不适用，自动退出。。。"
     sleep 1
-    exit 0
+    exit 1
+  fi
+  if [[ $EUID -ne 0 ]]; then
+    red "错误：必须使用 root 用户运行此脚本！"
+    exit 1
   fi
   clear
-  local num
   green "当前 PVE 版本: $PVE_VERSION"
-  green " ============================================================="
+  green "=============================================================="
   cat << 'EOF'
  __       __  __      __        _______   __     __  ________ 
 |  \     /  \|  \    /  \      |       \ |  \   |  \|        \
@@ -1008,26 +1116,26 @@ start_menu(){
 | $$  \$ | $$    | $$          | $$          \$$$   | $$     \
  \$$      \$$     \$$           \$$           \$     \$$$$$$$$
 EOF
-  green " ============================================================="
-  green " 介绍："
-  green " 一键配置 PVE9 系统综合脚本"
-  green " 此脚本由沅编写并保持开源~"
-  red " 仅供技术交流使用，本脚本开源，请勿用于商业用途！"
-  echo
-  green " 1. 设置 web 登录页默认语言为简体中文"
-  green " 2. 删除 local_lvm"
-  green " 3. 取消无效订阅弹窗"
-  green " 4. PVE 软件源更换"
-  green " 5. 更新 pve 系统"
-  green " 6. 更新 pve 系统且重启后执行系统清理程序"
-  green " 7. 开启 intel 核显 SR-IOV 虚拟化直通"
-  green " 8. 安装 UPS 监控软件 NUT"
-  green " 9. PVE 常用优化"
-  green " 10. 不常用功能安装"
-  blue " 0. 退出脚本"
-  echo
-  # read -p " 请输入数字选择你想要的执行项(0-10):" num
-  yellow_n " 请输入数字选择你想要的执行项(0-10):"
+  green "=============================================================="
+  green "介绍："
+  green "一键配置 PVE9 系统综合脚本"
+  green "此脚本由dajiangfu编写并保持开源~"
+  red "仅供技术交流使用，本脚本开源，请勿用于商业用途！"
+  printfn
+  green "1. 设置 web 登录页默认语言为简体中文"
+  green "2. 删除 local_lvm"
+  green "3. 取消无效订阅弹窗"
+  green "4. PVE 软件源更换"
+  green "5. 更新 pve 系统"
+  green "6. 更新系统后执行系统清理程序"
+  green "7. 开启 intel 核显 SR-IOV 虚拟化直通"
+  green "8. 安装 UPS 监控软件 NUT"
+  green "9. PVE 常用优化"
+  green "10. 不常用功能安装"
+  blue "0. 退出脚本"
+  printfn
+  # read -p "请输入数字选择你想要的执行项(0-10):" num
+  yellow_n "请输入数字选择你想要的执行项(0-10):"
   read num
   case "$num" in
   1)
@@ -1087,7 +1195,7 @@ EOF
   10)
   Infreq_used
   sleep 1s
-  read -s -n1 -p "按任意键返回上级菜单 ... "
+  # read -s -n1 -p "按任意键返回上级菜单 ... "
   start_menu
   ;;
   0)
