@@ -697,9 +697,6 @@ update_microcode() {
   current_mc=$(grep microcode /proc/cpuinfo | awk '{print $3}' | head -n1)
   green "当前运行中的微码版本: $current_mc"
   
-  # 更新仓库索引
-  apt-get update -q
-  
   # 检查包是否已安装
   if dpkg -s "$mc_package" >/dev/null 2>&1; then
     package_ver=$(dpkg -s "$mc_package" | awk '/Version:/{print $2}')
@@ -708,6 +705,8 @@ update_microcode() {
     # 判断是否需要升级
     if dpkg --compare-versions "$package_ver" lt "$candidate_ver"; then
       yellow "检测到微码包有新版本，准备升级..."
+      # 更新仓库索引
+      apt-get update -q
       if apt-get install --only-upgrade -y "$mc_package"; then
         green "微码包升级成功"
       else
@@ -720,6 +719,8 @@ update_microcode() {
     fi
   else
     yellow "微码包未安装，准备安装 $mc_package..."
+    # 更新仓库索引
+    apt-get update -q
     if apt-get install -y "$mc_package"; then
       green "微码包升级成功"
     else
