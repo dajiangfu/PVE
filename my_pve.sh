@@ -46,6 +46,7 @@ yellow() {
 }
 # 不换行输出写法，增加 -n
 yellow_n() {
+  local IFS=" "
   printf "\033[33m\033[01m%s\033[0m" "$*"
 }
 
