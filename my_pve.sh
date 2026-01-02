@@ -2,10 +2,14 @@
 
 # 注意：本脚本只针对 PVE9 编写，专用于 PVE9
 
-# printfn 实现printf+\n的效果，也就是和echo效果一样，输出字符串后在后面自动输出\n换行符
+# printfn 实现 printf+\n 的效果，也就是和 echo 效果一样，输出字符串后在后面自动输出 \n 换行符
 # 比如 echo "$content" > "$cfg" 就可以写成 printfn "$content" > "$cfg"
+# printfn() {
+#   printf "%s\n" "$1"
+# }
 printfn() {
-  printf "%s\n" "$1"
+  local IFS=" "
+  printf "%s\n" "$*"
 }
 
 blue() {
