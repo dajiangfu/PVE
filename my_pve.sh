@@ -162,6 +162,9 @@ change_source() {
   # PVE9 起删除旧的 .list 文件（如有）
   rm -f /etc/apt/sources.list >/dev/null 2>&1
   rm -f /etc/apt/sources.list.d/*.list >/dev/null 2>&1
+  # 强烈建议先删除企业源和 ceph 源
+  rm -f /etc/apt/sources.list.d/pve-enterprise.sources >/dev/null 2>&1
+  rm -f /etc/apt/sources.list.d/ceph.sources >/dev/null 2>&1
   
   # 如果 debian.sources 不存在，自动恢复
   if [ ! -f "$sources_file" ]; then
@@ -199,10 +202,7 @@ EOF
     fi
   fi
   
-  # 强烈建议先删除企业源
-  rm -f /etc/apt/sources.list.d/pve-enterprise.sources
-  # 然后配置免订阅存储库 pve-no-subscription ↓↓↓
-  
+  # 配置免订阅存储库 pve-no-subscription
   # 如果 proxmox_file.sources 不存在，自动恢复
   if [ ! -f "$proxmox_file" ]; then
     if [ ! -f "$bakproxmox" ]; then
@@ -363,7 +363,7 @@ cleanup_pve() {
 update_pve() {
   local choice="n"
   if ! apt-get update -q; then
-    red "存储库更新失败，请检查网络或 sources.list 配置或订阅密钥状态！"
+    red "存储库更新失败，请检查网络或 debian.sources 配置或订阅密钥状态！"
     return 1
   fi
 
