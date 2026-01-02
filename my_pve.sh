@@ -168,19 +168,18 @@ change_source() {
     if [ ! -f "$baksources" ]; then
       yellow "检测到 debian.sources 已丢失且无备份，重新创建并写入官方基础源"
       cat > "$sources_file" <<'EOF'
-# Types: deb deb-src
 Types: deb
 URIs: http://deb.debian.org/debian/
 Suites: trixie trixie-updates
-Components: main non-free-firmware
+Components: main contrib non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
-# Types: deb deb-src
 Types: deb
 URIs: http://security.debian.org/debian-security/
 Suites: trixie-security
-Components: main non-free-firmware
+Components: main contrib non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
 EOF
       # 仅第一次创建基础源的备份，以锁定官方基础源的备份
       cp "$sources_file" "$baksources"
