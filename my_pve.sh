@@ -323,50 +323,68 @@ cleanup_pve() {
   local boot_free_before=$(df -m / | awk 'NR==2 {print $4}') # 获取当前根分区剩余空间 (MB)
   local boot_free_after=0
   local saved_space=0
-  local k_list=""
-  local to_remove=""
+  local k_packages=""
+  local versions=""
+  local to_remove_versions=""
   local count=0
-  local confirm=""
-  local pkg=""
+  local short_ver=""
+  local rc_packages=""
+  local ver=""
   
   yellow "启动系统深度维护程序..."
   
-  # 1. APT 缓存瘦身
+  # 1. APT 缓存清理
   green "清理 APT 下载缓存..."
   apt-get autoclean -y >/dev/null 2>&1
   apt-get clean -y >/dev/null 2>&1
   
-  # 2. 内核精准净化 (兼容 PVE 7/8/9)
-  green "检索冗余内核..."
-  # 匹配 pve-kernel (旧) 和 proxmox-kernel (新)
-  k_list=$(dpkg-query -W -f='${Package}\n' | grep -E "^(pve|proxmox)-kernel-[0-9]" | grep -vE "series|transitional|$current_k" | sort -V)
-  if [ -n "$k_list" ] && [ $(echo "$k_list" | wc -l) -gt 1 ]; then
-    # 核心逻辑：保留列表最后一个（最新版），剩下的全部加入删除清单
-    to_remove=$(echo "$k_list" | head -n -1)
-    count=$(echo "$to_remove" | wc -l)
-    yellow "发现 $count 个可清理内核。将保留当前运行核($current_k)及一个备份核。"
-    echo "$to_remove" | sed 's/^/  [待卸载] /'
+  # 2. 内核及头文件精准净化 (只扫描已安装 ii 的包)，同时匹配 kernel 和 headers 才能清理干净
+  green "检索冗余内核及头文件..."
+  # 获取已安装的内核镜像和头文件包名
+  k_packages=$(dpkg -l | grep -E "^ii\s+(pve|proxmox)-(kernel|headers)-[0-9]" | awk '{print $2}')
+  # 提取版本号，过滤掉当前运行内核、过渡包
+  versions=$(echo "$k_packages" | sed -r 's/(pve|proxmox)-(kernel|headers)-//g' | grep -vE "series|transitional|$current_k" | sort -V | uniq)
+  if [ -n "$versions" ] && [ $(echo "$versions" | wc -l) -gt 1 ]; then
+    # 保留列表最后一个（除当前内核的最新版本作为备份）
+    to_remove_versions=$(echo "$versions" | head -n -1)
+    count=$(echo "$to_remove_versions" | wc -l)
+    yellow "发现 $count 个可清理内核版本。将保留运行核 ($current_k) 及一个备用核。"
+    echo "$to_remove_versions" | sed 's/^/  [待卸载版本] /'
     read -p "确认执行深度卸载并刷新引导？[y/N]: " confirm
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
-      for pkg in $to_remove; do
-        green "正在净化: $pkg"
-        apt-get purge -y "$pkg" >/dev/null 2>&1
+      for ver in $to_remove_versions; do
+        green "正在净化版本: $ver 相关的所有包..."
+        # 彻底清除相关的所有包 (Purge)，联动清理镜像与头文件
+        apt-get purge -y "pve-kernel-$ver" "proxmox-kernel-$ver" "pve-headers-$ver" "proxmox-headers-$ver" >/dev/null 2>&1
+        # 兼容处理不带 -pve 后缀的旧式包名
+        short_ver=$(echo $ver | sed 's/-pve//')
+        if [ "$short_ver" != "$ver" ]; then
+           apt-get purge -y "pve-kernel-$short_ver" "proxmox-kernel-$short_ver" "pve-headers-$short_ver" "proxmox-headers-$short_ver" >/dev/null 2>&1
+        fi
       done
+      # 必须刷新 GRUB，否则旧内核依然会出现在启动菜单中
       green "正在更新 GRUB 引导菜单..."
       update-grub >/dev/null 2>&1
-      green "内核卸载及 GRUB 刷新完成"
     else
-      green "已跳过内核卸载步骤"
+      green "已跳过内核卸载步骤。"
     fi
   else
-    green "内核环境已是精简状态，无需处理"
+    green "内核环境已是精简状态，无需处理。"
   fi
   
-  # 3. 彻底清理孤立的依赖（包含 Headers）
+  # 3. 专项清理：清除所有处于 "rc" 状态的残留配置文件 (核心增强)
+  # rc 表示已删除但留有配置，这些包已无用，清理它们是安全的
+  rc_packages=$(dpkg -l | grep '^rc' | awk '{print $2}')
+  if [ -n "$rc_packages" ]; then
+    green "发现残留配置文件 (rc 状态)，正在彻底清除..."
+    echo "$rc_packages" | xargs -r dpkg --purge >/dev/null 2>&1
+  fi
+
+  # 4. 彻底清理孤立依赖 (这一步能扫描并清除掉漏网的 headers)
   green "清理残留头文件与孤立依赖..."
   apt-get autoremove --purge -y >/dev/null 2>&1
   
-  # 4. 统计
+  # 5. 最终统计
   boot_free_after=$(df -m / | awk 'NR==2 {print $4}')
   saved_space=$((boot_free_after - boot_free_before))
   if [ "$saved_space" -gt 0 ]; then
