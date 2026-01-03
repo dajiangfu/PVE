@@ -238,6 +238,7 @@ URIs: http://download.proxmox.com/debian/pve
 Suites: trixie
 Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+
 EOF
       # 仅第一次创建免订阅源的备份，以锁定官方免订阅源的备份
       cp "$proxmox_file" "$bakproxmox"
@@ -295,6 +296,7 @@ URIs: https://mirrors.ustc.edu.cn/debian-security
 Suites: trixie-security
 Components: main contrib non-free non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
 EOF
       cat > "$proxmox_file" <<'EOF'
 Types: deb
@@ -302,6 +304,7 @@ URIs: https://mirrors.ustc.edu.cn/proxmox/debian
 Suites: trixie
 Components: pve-no-subscription
 Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+
 EOF
       ;;
     *)
@@ -1019,7 +1022,7 @@ install_glances_venv(){
 
   # 创建 systemd 服务文件
   green "创建 systemd 服务..."
-cat << EOF > /etc/systemd/system/glances.service
+cat > /etc/systemd/system/glances.service << 'EOF'
 [Unit]
 Description=Glances Monitoring Service
 After=network.target
@@ -1030,6 +1033,7 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
+
 EOF
 
   # 重新加载 systemd 并启动 Glances
