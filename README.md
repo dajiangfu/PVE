@@ -48,8 +48,11 @@ UPS 自动化集成：一键配置 NUT (Network UPS Tools)，为你的私有云�
 
 🚀 快速开始
 在 PVE Shell 中执行以下命令（请确保已安装 curl）：
+
 curl -O https://raw.githubusercontent.com/dajiangfu/PVE/master/my_pve.sh && chmod +x my_pve.sh && ./my_pve.sh
+
 ![PVE 脚本主菜单](脚本截图.png)
+
 ⚠️ 开发者提示
 版本限制：本脚本专为 PVE 9.0 及以上版本编写，低于此版本将自动终止运行以防受损。
 
@@ -63,3 +66,6 @@ MOK 引导：开启 SR-IOV 涉及安全启动密钥导入，脚本会详细引�
 脚本参考了 Jordan Hillis 的内核清理方案。
 
 感谢 Proxmox VE 社区的文档支持。
+
+# 如果有觉得喜欢的，欢迎打赏，请我喝一瓶水~
+
