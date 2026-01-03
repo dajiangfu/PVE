@@ -1,13 +1,76 @@
-# PVE
+# Proxmox VE 9 终极全能优化脚本 (My-PVE)
 
-用于一键脚本配置PVE，此脚本会持续更新完善，也欢迎大家一起参与
-
-综合常用脚本运行方法：
-
+全能优化脚本运行方法：
 curl -O https://raw.githubusercontent.com/dajiangfu/PVE/master/my_pve.sh && chmod +x my_pve.sh && ./my_pve.sh
 
 配置pve的web界面显示传感器温度、CPU频率运行方法：
-
 curl -O https://raw.githubusercontent.com/dajiangfu/PVE/master/chSensors.sh && chmod +x chSensors.sh && ./chSensors.sh
 
-感谢chatgpt的帮助！
+🚀 专为 Proxmox VE 9.x 设计的自动化运维与性能榨干工具。
+用于一键脚本配置PVE，此脚本会持续更新完善，也欢迎大家一起参与
+
+这不仅仅是一个更换软件源的简单脚本，而是一个集成了硬件直通、内核调优、系统瘦身和智能监控的高级管理套件。
+
+✨ 核心亮点
+PVE 9 深度适配：针对 Debian 12 (Trixie) 内核和 PVE 9 的全新存储库格式（.sources）进行专项开发。
+
+Intel 核显 SR-IOV 自动化：一键开启 Intel 核显的虚拟化直通（SR-IOV），告别繁琐的编译和手动配置。
+
+极致内核调优：集成 CPU 高性能模式、KSM 内存管理优化、THP 智能模式及 SWAP 策略调整，释放物理机极限性能。
+
+智能空间管理：自动化合并 local-lvm 到 root，并提供深度的旧内核清理功能，保证 /boot 分区永不爆满。
+
+UPS 自动化集成：一键配置 NUT (Network UPS Tools)，为你的私有云提供断电自动关机保护。
+
+🛠️ 主要功能一览
+1. 基础运维
+✅ 中文化界面：一键设置 Web 登录页默认为简体中文。
+
+✅ 订阅弹窗净化：永久去除“无有效订阅”提示，告别烦人的启动弹窗。
+
+✅ 智能换源：支持一键切换官方源或中科大（USTC）镜像源。
+
+✅ 系统深度清理：智能识别并清理多余的旧内核，只保留当前运行及一个备份内核。
+
+2. 存储与性能优化
+💾 存储合并：将冗余的 local-lvm 空间合并至根分区，方便统一管理磁盘。
+
+⚡ SSD TRIM 优化：开启定时及即时 TRIM 回收，延长 SSD 寿命并保持读写性能。
+
+🧠 内核调优组合包：
+
+禁用 KSM（内核内存共享），减少 CPU 负担。
+
+设置 THP 为 madvise 智能模式，降低内存延迟。
+
+优化 Swappiness 值，优先使用物理内存。
+
+3. 高级硬件增强
+🖥️ Intel SR-IOV 直通：自动安装 DKMS 驱动，实现单核显分配给多个虚拟机同时使用。
+
+🔋 UPS NUT 监控：自动化下载配置方案，支持自定义监控账号密码。
+
+📊 Glances 监控：在 Python 虚拟环境中安装高级硬件监控工具，不污染系统环境。
+
+🚀 快速开始
+在 PVE Shell 中执行以下命令（请确保已安装 curl）：
+
+Bash
+
+curl -fSL https://raw.githubusercontent.com/你的用户名/项目名/main/my_pve.sh -o my_pve.sh && chmod +x my_pve.sh && ./my_pve.sh
+📸 功能截图
+(建议在此处上传你脚本运行时的菜单截图，展示彩色的提示文字和清晰的选项)
+
+⚠️ 开发者提示
+版本限制：本脚本专为 PVE 9.0 及以上版本编写，低于此版本将自动终止运行以防受损。
+
+安全性：脚本在修改关键配置前会自动进行备份（如 .bak 文件），确保操作可逆。
+
+MOK 引导：开启 SR-IOV 涉及安全启动密钥导入，脚本会详细引导你完成物理机重启后的 MOK 授权步骤。
+
+🤝 贡献与感谢
+本脚本开源且免费，欢迎提交 Pull Request 提供更好的优化思路！
+
+脚本参考了 Jordan Hillis 的内核清理方案。
+
+感谢 Proxmox VE 社区的文档支持。
