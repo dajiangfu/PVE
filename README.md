@@ -47,7 +47,7 @@ UPS 自动化集成：一键配置 NUT (Network UPS Tools)，为你的私有云�
 📊 Glances 监控：在 Python 虚拟环境中安装高级硬件监控工具，不污染系统环境。
 
 🚀 快速开始
-在 PVE Shell 中执行以下命令（请确保已安装 curl）：
+在 PVE Shell 中执行以下命令：
 
 curl -O https://raw.githubusercontent.com/dajiangfu/PVE/master/my_pve.sh && chmod +x my_pve.sh && ./my_pve.sh
 
