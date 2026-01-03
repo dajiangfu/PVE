@@ -1,11 +1,5 @@
 # Proxmox VE 9 终极全能优化脚本 (My-PVE)
 
-全能优化脚本运行方法：
-curl -O https://raw.githubusercontent.com/dajiangfu/PVE/master/my_pve.sh && chmod +x my_pve.sh && ./my_pve.sh
-
-配置pve的web界面显示传感器温度、CPU频率运行方法：
-curl -O https://raw.githubusercontent.com/dajiangfu/PVE/master/chSensors.sh && chmod +x chSensors.sh && ./chSensors.sh
-
 🚀 专为 Proxmox VE 9.x 设计的自动化运维与性能榨干工具。
 用于一键脚本配置PVE，此脚本会持续更新完善，也欢迎大家一起参与
 
@@ -57,9 +51,7 @@ UPS 自动化集成：一键配置 NUT (Network UPS Tools)，为你的私有云�
 
 Bash
 
-curl -fSL https://raw.githubusercontent.com/你的用户名/项目名/main/my_pve.sh -o my_pve.sh && chmod +x my_pve.sh && ./my_pve.sh
-📸 功能截图
-(建议在此处上传你脚本运行时的菜单截图，展示彩色的提示文字和清晰的选项)
+curl -O https://raw.githubusercontent.com/dajiangfu/PVE/master/my_pve.sh && chmod +x my_pve.sh && ./my_pve.sh
 
 ⚠️ 开发者提示
 版本限制：本脚本专为 PVE 9.0 及以上版本编写，低于此版本将自动终止运行以防受损。
