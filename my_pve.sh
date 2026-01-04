@@ -71,19 +71,19 @@ spinner() {
 set_default_language_zh_CN() {
   local cfg="/etc/pve/datacenter.cfg"
   local content
-
+  
   # 文件不存在：直接失败
   if [ ! -f "$cfg" ]; then
     red "错误：$cfg 不存在！"
     return 1
   fi
-
+  
   # 已经是 zh_CN，直接返回（幂等）
   if grep -qE '^[[:space:]]*language:[[:space:]]*zh_CN' "$cfg"; then
     green "PVE 默认语言已是 zh_CN，无需修改"
     return 0
   fi
-
+  
   # 修改或添加配置，使用内存变量处理，避免操作 pmxcfs 时产生过多的磁盘/集群同步动作
   if grep -q '^[[:space:]]*language:' "$cfg"; then
     # 已有 language 配置项，替换现有行
@@ -97,7 +97,7 @@ set_default_language_zh_CN() {
     fi
     content+="language: zh_CN"
   fi
-
+  
   # 4. 回写文件 (保持原子性和权限)
   if printfn "$content" > "$cfg"; then
     green "PVE 默认语言已设置为 zh_CN（刷新 Web 即可生效）"
@@ -116,36 +116,36 @@ delete_local_lvm() {
     red "错误：未检测到 VG pve，终止操作"
     return 1
   fi
-
+  
   # 1. 检查 pve/data 是否存在
   if ! lvs pve/data >/dev/null 2>&1; then
     blue "检测到 pve/data 不存在，local-lvm 可能已删除，跳过操作"
     return 0
   fi
-
+  
   # 2. 删除逻辑卷
   if ! lvremove -y pve/data; then
     red "错误：无法删除 pve/data，请确保没有虚拟机/容器在使用"
     return 1
   fi
   green "底层逻辑卷 pve/data 已删除"
-
+  
   # 3. 移除 PVE 存储配置
   # 执行此命令只会从 PVE 的配置文件（/etc/pve/storage.cfg）中移除该存储的挂载/定义，不会物理格式化硬盘，但会导致 PVE 界面上无法再看到和使用该存储
   pvesm remove local-lvm >/dev/null 2>&1
   green "PVE 存储配置 local-lvm 已移除"
-
+  
   # 4. 扩展 root
   if ! lvextend -l +100%FREE -r pve/root; then
     red "错误：root 扩容失败"
     return 1
   fi
   green "Root 分区已成功扩展并自动调整文件系统大小"
-
+  
   # 5. 设置 local 存储内容(因为后面要创建 yuan 目录存储所有内容，不用 local ，所以 local 内容设置默认即可，所以此项被注释)
   # pvesm set local --content backup,iso,vztmpl,rootdir,snippets >/dev/null 2>&1
   # green "已将所有功能开启到 local 存储中"
-
+  
   green "local-lvm 已成功合并至 root"
 }
 
@@ -312,7 +312,7 @@ EOF
       return 1
       ;;
   esac
-
+  
   green "替换完成！"
 }
 
@@ -379,7 +379,7 @@ cleanup_pve() {
     green "发现残留配置文件 (rc 状态)，正在彻底清除..."
     echo "$rc_packages" | xargs -r dpkg --purge >/dev/null 2>&1
   fi
-
+  
   # 4. 彻底清理孤立依赖 (这一步能扫描并清除掉漏网的 headers)
   green "清理残留头文件与孤立依赖..."
   apt-get autoremove --purge -y >/dev/null 2>&1
@@ -393,17 +393,6 @@ cleanup_pve() {
     green "系统已处于最佳状态，未发现可清理的冗余文件。"
   fi
 }
-# cleanup_pve() {
-#   # 清理本地缓存中过期的 .deb 包（存放在 /var/cache/apt/archives）
-#   green "清理 APT 缓存..."
-#   apt-get autoclean
-#   # 检查系统中不再被任何已安装软件依赖的包
-#   green "以下包将被移除（不包含当前内核）："
-#   apt-get autoremove --purge --dry-run | grep -v "$(uname -r)"
-#   # 执行清理
-#   yellow "开始执行系统清理..."
-#   apt-get autoremove --purge -y
-# }
 
 # 更新 pve 系统
 update_pve() {
@@ -412,7 +401,7 @@ update_pve() {
     red "存储库更新失败，请检查网络或 debian.sources 配置或订阅密钥状态！"
     return 1
   fi
-
+  
   green "升级软件包..."
   if ! apt-get full-upgrade -y; then
     red "软件包升级失败，请检查错误日志！"
@@ -420,13 +409,21 @@ update_pve() {
   fi
   
   # 更新系统后执行系统清理程序，包含清理旧内核，只保留当前使用的和备用最新的这两个内核
-  cleanup_pve
-  green "可在重启后再次运行更新系统后执行系统清理程序"
+  read -p "已更新完毕，是否马上清理系统？请输入 [Y/n]: " choice
+  choice=$(printf "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
+  [ -z "${choice}" ] && choice="n"
+  if [[ "$choice" == "y" ]]; then
+    green "开始系统清理..."
+    cleanup_pve
+    green "可在重启后再次运行本脚本的第 6 项清理程序"
+  else
+    blue "已取消，可在重启后运行本脚本的第 6 项清理程序"
+  fi
   
   # 询问用户是否重启
   read -p "已更新完毕，是否重启系统？请输入 [Y/n]: " choice
   choice=$(printf "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
-  [ -z "${choice}" ] && choice="y"
+  [ -z "${choice}" ] && choice="n"
   if [[ "$choice" == "y" ]]; then
     green "系统将在 2 秒后重启..."
     sleep 2
@@ -507,7 +504,7 @@ install_intel_sr_iov_dkms() {
     red "i915-sriov-dkms未安装，退出！"
     return 1
   fi
-
+  
   # 对于全新安装的 Proxmox 8.1 及更高版本，可以启用安全启动。以防万一，我们需要加载 DKMS 密钥，以便内核加载模块。
   # 运行以下命令，然后输入密码。此密码仅用于 MOK 设置，重新启动主机时将再次使用。此后，不需要密码。
   # 它不需要与您用于 root 帐户的密码相同。
@@ -528,19 +525,19 @@ install_intel_sr_iov_dkms() {
   for m in "${modules[@]}"; do
       grep -qxF "$m" /etc/modules || printfn "$m" >> /etc/modules
   done
-
+  
   # 完成 PCI 配置
   # 现在我们需要找到 VGA 卡位于哪个 PCIe 总线上。通常 VGA 总线 ID 为 00:02.0
   # 获取 VGA 设备的 PCIe 总线号
   # vga_id=$(lspci | grep VGA | awk '{print $1}') # 此命令会造成多个 vga_id 被赋值到一起
   vga_id=$(lspci | grep VGA | awk '{print $1}' | head -n1) # 取第一行物理 GPU 的 vga_id，因为物理 GPU 的vga_id 是 .0 地址总是在最前面，VF 的 vga_id 是从 .1 开始的
-
+  
   #确保成功获取 vga_id
   if [ -z "$vga_id" ]; then
     red "未找到 VGA 设备，请检查 lspci 输出！"
     return 1
   fi
-
+  
   # 生成 sysfs 配置
   # printfn "devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3" > /etc/sysfs.conf # 此命令会造成重复追加，废除
   # sysfs_line="devices/pci0000:00/0000:$vga_id/sriov_numvfs = 3"
@@ -549,7 +546,7 @@ install_intel_sr_iov_dkms() {
   touch /etc/sysfs.conf
   grep -qxF "$sysfs_line" /etc/sysfs.conf || printfn "$sysfs_line" >> /etc/sysfs.conf
   systemctl enable sysfsutils
-
+  
   # 输出结果
   printfn "已写入 /etc/sysfs.conf，内容如下："
   # 匹配丢弃所有以 # 开头的行。这样就过滤掉所有注释行和空白行，只显示文件中“真正有效”的内容
@@ -568,14 +565,14 @@ install_intel_sr_iov_dkms() {
   # 询问用户是否重启
   read -p "已设置完毕，是否重启系统？请输入 [Y/n]: " choice
   choice=$(printf "$choice" | tr 'A-Z' 'a-z')  # 转换为小写，兼容性好，也可以用更现代的choice=${choice,,}
-  [ -z "${choice}" ] && choice="y"
+  [ -z "${choice}" ] && choice="n"
   if [[ "$choice" == "y" ]]; then
     green "系统将在 2 秒后重启..."
     sleep 2
     sync
     reboot
   else
-    blue "已取消，请稍后自行重启。"
+    blue "已取消，建议尽快重启以启用 SR-IOV"
   fi
 }
 
@@ -698,13 +695,13 @@ close_ksm() {
       systemctl disable --now "$svc" >/dev/null 2>&1
     fi
   done
-
+  
   # 2. 内核层禁用
   # 停止 KSM 扫描
   printf 0 > /sys/kernel/mm/ksm/run
   # 将扫描页数设为 0 以节省微量 CPU
   printf 0 > /sys/kernel/mm/ksm/pages_to_scan
-
+  
   # 3. 验证状态
   ksm_status=$(cat /sys/kernel/mm/ksm/run)
   if [ "$ksm_status" -eq 0 ]; then
@@ -961,7 +958,7 @@ set_cpu_performance() {
       fi
     fi
   done
-    
+  
   if [ "$need_change" = false ]; then
     green "所有 CPU governor 已是 $governor，跳过设置"
     return 0
@@ -1012,16 +1009,16 @@ install_glances_venv(){
   local PVE_IP=""
   # 设置Glances安装目录
   # GLANCES_DIR="/opt/glances"  # 调用使用$GLANCES_DIR
-
+  
   # 安装 Python 和 venv
   green "安装Python及venv..."
   apt-get update -q
   apt-get install -y python3 python3-pip python3-venv lm-sensors
-
+  
   # 创建 venv
   green "创建Python虚拟环境..."
   python3 -m venv /opt/glances
-
+  
   # 激活 venv 并安装 Glances，激活 venv 后使用 pip 安装软件不会影响 PVE 系统所有安装的 Python 包都只会存放在 /opt/glances 目录，不会污染系统
   green "进入虚拟环境并安装Glances..."
   source /opt/glances/bin/activate
@@ -1037,7 +1034,7 @@ install_glances_venv(){
   # green "添加Glances到全局路径..."
   # ln -sf /opt/glances/bin/glances /usr/local/bin/glances
   # 如使用 glances -w --username --password 命令创建用户名和密码是要用到，不然 glances 命令无法识别
-
+  
   # 创建 systemd 服务文件
   green "创建 systemd 服务..."
 cat > /etc/systemd/system/glances.service << 'EOF'
@@ -1053,7 +1050,7 @@ Restart=always
 WantedBy=multi-user.target
 
 EOF
-
+  
   # 重新加载 systemd 并启动 Glances
   green "启动Glances..."
   systemctl daemon-reload
@@ -1065,10 +1062,10 @@ EOF
   # systemctl enable glances.service   # 设置开机自启
   # systemctl restart glances.service    # 立即启动服务
   # --now 选项表示同时启用（开机自启）并立即启动该服务。
-
+  
   # 获取PVEIP地址
   PVE_IP=$(hostname -I | awk '{print $1}')
-
+  
   green "Glances安装完成！"
   green "现在可以在HomeAssistant添加Glances监控PVE！"
   green "WebUI和API访问地址: http://$PVE_IP:61208"
