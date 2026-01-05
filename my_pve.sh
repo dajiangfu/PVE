@@ -515,9 +515,10 @@ install_intel_sr_iov_dkms() {
   
   # Proxmox GRUB 配置，Proxmox 的默认安装使用 GRUB 引导加载程序
   # module_blacklist=xe 是黑名单 xe 驱动，避免系统自动切换为 xe 驱动，i915 驱动更成熟，且 istoreos 中也是 i915 驱动
-  # initcall_blacklist=sysfb_init 是禁用 framebuffer 初始化，宿主机无法显示 HDMI/DP 图形界面，有利于 VM 中通过 HDMI/DP 显示画面，我的 PVE 系统本身不需要用显示器接口看画面，只在 VM 中使用显卡，可以加
   cp -a /etc/default/grub{,.bak}
-  sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3 module_blacklist=xe initcall_blacklist=sysfb_init"' /etc/default/grub
+  sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet iommu=pt i915.enable_guc=3 i915.max_vfs=3 module_blacklist=xe"' /etc/default/grub
+  # sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt i915.enable_guc=3 i915.max_vfs=3 module_blacklist=xe"' /etc/default/grub
+  # 对于 intel 核显，内核版本大于 6.8 的默认开启 IOMMU，如果是老版本内核，需要加 intel_iommu=on
   
   # 加载内核模块:
   # printfn -e "vfio\nvfio_iommu_type1\nvfio_pci\nvfio_virqfd" >> /etc/modules # 此命令会造成重复追加，废除
