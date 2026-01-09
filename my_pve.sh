@@ -149,33 +149,6 @@ delete_local_lvm() {
   green "local-lvm 已成功合并至 root"
 }
 
-# 取消无效订阅弹窗
-delete_invalid_subscription_popup() {
-  local jsfile="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
-  local bakjs="${jsfile}.bak"
-  
-  # 检查是否已经修改过
-  if grep -q "void({ //Ext.Msg.show({" "$jsfile"; then
-    green "订阅弹窗已修改过，无需重复操作"
-    return 0
-  fi
-  
-  # 备份原始文件，如果升级了，jsfile 会变回原样，我们需要重新备份
-  cp "$jsfile" "$bakjs"
-  
-  # 修改取消弹窗
-  # 匹配：包含 No valid subscription 的 Ext.Msg.show({
-  # 将 Ext.Msg.show({ 替换为：void({ //Ext.Msg.show({
-  yellow "正在修改 JS 文件以禁用订阅弹窗..."
-  if sed -Ezi "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" "$jsfile"; then
-    # 重启服务
-    systemctl restart pveproxy.service
-    green "订阅弹窗逻辑已禁用，如果 PVE 界面还有弹窗，记得按 Ctrl+F5 强制刷新，因为浏览器会缓存这个 JS 文件"
-  else
-    red "错误：JS 修改失败"
-  fi
-}
-
 # PVE 软件源更换，建议尽可能使用官方源不是镜像源，如网络实在连不上官方源则使用第三方源
 change_source() {
   local sources_file="/etc/apt/sources.list.d/debian.sources"
@@ -431,6 +404,33 @@ update_pve() {
     reboot
   else
     blue "已取消，请稍后自行重启。"
+  fi
+}
+
+# 取消无效订阅弹窗
+delete_invalid_subscription_popup() {
+  local jsfile="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
+  local bakjs="${jsfile}.bak"
+  
+  # 检查是否已经修改过
+  if grep -q "void({ //Ext.Msg.show({" "$jsfile"; then
+    green "订阅弹窗已修改过，无需重复操作"
+    return 0
+  fi
+  
+  # 备份原始文件，如果升级了，jsfile 会变回原样，我们需要重新备份
+  cp "$jsfile" "$bakjs"
+  
+  # 修改取消弹窗
+  # 匹配：包含 No valid subscription 的 Ext.Msg.show({
+  # 将 Ext.Msg.show({ 替换为：void({ //Ext.Msg.show({
+  yellow "正在修改 JS 文件以禁用订阅弹窗..."
+  if sed -Ezi "s/(Ext.Msg.show\(\{\s+title: gettext\('No valid sub)/void\(\{ \/\/\1/g" "$jsfile"; then
+    # 重启服务
+    systemctl restart pveproxy.service
+    green "订阅弹窗逻辑已禁用，如果 PVE 界面还有弹窗，记得按 Ctrl+F5 强制刷新，因为浏览器会缓存这个 JS 文件"
+  else
+    red "错误：JS 修改失败"
   fi
 }
 
@@ -1170,9 +1170,9 @@ EOF
   printfn
   green "1. 设置 web 登录页默认语言为简体中文"
   green "2. 删除 local_lvm"
-  green "3. 取消无效订阅弹窗"
-  green "4. PVE 软件源更换"
-  green "5. 更新 pve 系统"
+  green "3. PVE 软件源更换"
+  green "4. 更新 pve 系统"
+  green "5. 取消无效订阅弹窗"
   green "6. 更新系统后执行系统清理程序"
   green "7. 开启 intel 核显 SR-IOV 虚拟化直通"
   green "8. 安装 UPS 监控软件 NUT"
@@ -1197,19 +1197,19 @@ EOF
   start_menu
   ;;
   3)
-  delete_invalid_subscription_popup
-  sleep 1s
-  read -s -n1 -p "按任意键返回菜单 ... "
-  start_menu
-  ;;
-  4)
   change_source
   sleep 1s
   read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
   ;;
-  5)
+  4)
   update_pve
+  sleep 1s
+  read -s -n1 -p "按任意键返回菜单 ... "
+  start_menu
+  ;;
+  5)
+  delete_invalid_subscription_popup
   sleep 1s
   read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
