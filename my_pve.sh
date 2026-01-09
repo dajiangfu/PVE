@@ -316,13 +316,13 @@ cleanup_pve() {
   # 获取已安装的内核镜像和头文件包名
   k_packages=$(dpkg -l | grep -E "^ii\s+(pve|proxmox)-(kernel|headers)-[0-9]" | awk '{print $2}')
   # 提取版本号，过滤掉当前运行内核、过渡包
-  versions=$(echo "$k_packages" | sed -r 's/(pve|proxmox)-(kernel|headers)-//g' | grep -vE "series|transitional|$current_k" | sort -V | uniq)
-  if [ -n "$versions" ] && [ $(echo "$versions" | wc -l) -gt 1 ]; then
+  versions=$(printfn "$k_packages" | sed -r 's/(pve|proxmox)-(kernel|headers)-//g' | grep -vE "series|transitional|$current_k" | sort -V | uniq)
+  if [ -n "$versions" ] && [ $(printfn "$versions" | wc -l) -gt 1 ]; then
     # 保留列表最后一个（除当前内核的最新版本作为备份）
-    to_remove_versions=$(echo "$versions" | head -n -1)
-    count=$(echo "$to_remove_versions" | wc -l)
+    to_remove_versions=$(printfn "$versions" | head -n -1)
+    count=$(printfn "$to_remove_versions" | wc -l)
     yellow "发现 $count 个可清理内核版本。将保留运行核 ($current_k) 及一个备用核。"
-    echo "$to_remove_versions" | sed 's/^/  [待卸载版本] /'
+    printfn "$to_remove_versions" | sed 's/^/  [待卸载版本] /'
     read -p "确认执行深度卸载并刷新引导？[y/N]: " confirm
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
       for ver in $to_remove_versions; do
@@ -330,7 +330,8 @@ cleanup_pve() {
         # 彻底清除相关的所有包 (Purge)，联动清理镜像与头文件
         apt-get purge -y "pve-kernel-$ver" "proxmox-kernel-$ver" "pve-headers-$ver" "proxmox-headers-$ver" >/dev/null 2>&1
         # 兼容处理不带 -pve 后缀的旧式包名
-        short_ver=$(echo $ver | sed 's/-pve//')
+        # short_ver=$(printfn "$ver" | sed 's/-pve//')
+        short_ver=${ver/-pve/}
         if [ "$short_ver" != "$ver" ]; then
            apt-get purge -y "pve-kernel-$short_ver" "proxmox-kernel-$short_ver" "pve-headers-$short_ver" "proxmox-headers-$short_ver" >/dev/null 2>&1
         fi
@@ -350,7 +351,7 @@ cleanup_pve() {
   rc_packages=$(dpkg -l | grep '^rc' | awk '{print $2}')
   if [ -n "$rc_packages" ]; then
     green "发现残留配置文件 (rc 状态)，正在彻底清除..."
-    echo "$rc_packages" | xargs -r dpkg --purge >/dev/null 2>&1
+    printfn "$rc_packages" | xargs -r dpkg --purge >/dev/null 2>&1
   fi
   
   # 4. 彻底清理孤立依赖 (这一步能扫描并清除掉漏网的 headers)
@@ -432,6 +433,112 @@ delete_invalid_subscription_popup() {
   else
     red "错误：JS 修改失败"
   fi
+}
+
+# 安装 UPS 监控软件 NUT
+install_ups_nut() {
+  local BASE_URL=""
+  local DEST_DIR=""
+  local FILES=""
+  local FILE=""
+  local UPSD_USERS_FILE="/etc/nut/upsd.users"
+  local UPSMON_CONF_FILE="/etc/nut/upsmon.conf"
+  # 新/旧用户名和密码
+  local OLD_USERNAME="monusername"
+  local OLD_PASSWORD="mima"
+  local NEW_USERNAME="monusername"
+  local NEW_PASSWORD="mima"
+  local ESCAPED_NEW_USERNAME=""
+  local ESCAPED_NEW_PASSWORD=""
+  
+  apt-get update -q
+  apt-get install -y nut # nut 包通常会安装一些常见的依赖包，如 nut-client、nut-server、nut-cgi、nut-scanner，因此你可能不需要手动安装这些组件。
+  # 查看 UPS 设备硬件信息
+  # nut-scanner # 需要用户交互，在扫描过程中可能会提示用户做出选择，这个命令用于扫描计算机上连接的 UPS 设备，检查系统是否能够识别和通信，它会尝试自动检测并列出所有可用的 UPS 设备。
+  nut-scanner -U # -U 选项用于使扫描器以 "不带用户交互" 的方式运行，会自动执行扫描，不会要求用户输入任何内容，适合自动化操作。
+  green "安装NUT完成！下面进行配置"
+  # GitHub 文件路径
+  BASE_URL="https://raw.githubusercontent.com/dajiangfu/PVE/main/nut"
+  
+  # 目标目录
+  DEST_DIR="/etc/nut"
+  
+  # 文件列表
+  FILES=("nut.conf" "ups.conf" "upsd.conf" "upsd.users" "upsmon.conf" "upssched.conf" "upssched-cmd")
+  
+  # 确保目标目录存在
+  if [ ! -d "$DEST_DIR" ]; then
+    blue "目录 $DEST_DIR 不存在，开始创建..."
+    mkdir -p "$DEST_DIR"
+  fi
+  
+  # 下载文件并保存到 /etc/nut 目录
+  for FILE in "${FILES[@]}"; do
+    green "下载 $FILE..."
+    curl -fsSL -o "$DEST_DIR/$FILE" "$BASE_URL/$FILE" || {
+      red "$FILE 下载失败"
+      return 1
+    }
+  done
+  green "所有文件已下载并保存到 $DEST_DIR."
+  read -s -n1 -p "请确认 UPS 已通过 USB 线连接，按任意键继续 ..."
+  
+  # 提示用户输入新的用户名和密码，如果用户直接按回车（什么都不输入），变量就会自动被赋值为默认值
+  read -p "请输入新的 NUT 监控用户名 [默认: monusername]: " NEW_USERNAME
+  # 如果输入为空，设置默认值并给用户提示
+  if [ -z "$NEW_USERNAME" ]; then
+    NEW_USERNAME="monusername"
+    yellow "-> 检测到空输入，已自动应用默认用户名: monusername"
+  else
+    green "-> 用户名已自定义。"
+  fi
+  read -sp "请输入新的密码 [默认: mima]: " NEW_PASSWORD
+  printfn ""
+  # 如果输入为空，设置默认值并给用户提示
+  if [ -z "$NEW_PASSWORD" ]; then
+    NEW_PASSWORD="mima"
+    yellow "-> 检测到空输入，已自动应用默认密码: mima"
+  else
+    green "-> 密码已自定义。"
+  fi
+  
+  # 备份原始文件
+  cp "$UPSD_USERS_FILE" "$UPSD_USERS_FILE.bak"
+  cp "$UPSMON_CONF_FILE" "$UPSMON_CONF_FILE.bak"
+  
+  # 对用户名和密码进行转义，避免特殊字符导致 sed 出错
+  ESCAPED_NEW_USERNAME=$(printf '%s\n' "$NEW_USERNAME" | sed 's/[\/&]/\\&/g')
+  ESCAPED_NEW_PASSWORD=$(printf '%s\n' "$NEW_PASSWORD" | sed 's/[\/&]/\\&/g')
+  # 使用 sed 替换用户名和密码
+  sed -i "s#$OLD_USERNAME#$ESCAPED_NEW_USERNAME#g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
+  sed -i "s#$OLD_PASSWORD#$ESCAPED_NEW_PASSWORD#g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
+  
+  green "正在优化配置文件权限..."
+  # 1. 设置所有权：root 拥有，nut 组可读
+  chown root:nut /etc/nut/*
+  
+  # 2. 设置普通配置文件：640 (属主读写，组只读，其他无权)
+  # 这样 nut 用户可以读取配置，但不能修改，也不能被无关人员查看
+  chmod 640 /etc/nut/*.conf
+  chmod 640 /etc/nut/upsd.users
+  
+  # 3. 设置脚本文件：750 (属主读写执行，组读执行，其他无权)
+  # 只有这个文件需要执行权限，以便触发关机动作
+  chmod 750 /etc/nut/upssched-cmd
+  
+  green "配置更新完成！重启服务..."
+  systemctl restart nut-server
+  sleep 3 # 给驱动一点初始化时间
+  systemctl restart nut-monitor
+  systemctl restart nut-upssched
+  
+  # 检查服务状态
+  if systemctl is-active --quiet nut-server nut-monitor; then
+    green "NUT 服务已启动！"
+  else
+    red "NUT 服务启动失败，请检查 /etc/nut/ups.conf 中的驱动配置。"
+  fi
+  upsc tgbox850@localhost
 }
 
 # 开启 intel 核显 SR-IOV 虚拟化直通
@@ -575,111 +682,6 @@ install_intel_sr_iov_dkms() {
   else
     blue "已取消，建议尽快重启以启用 SR-IOV"
   fi
-}
-
-# 安装 UPS 监控软件 NUT
-install_ups_nut() {
-  local BASE_URL=""
-  local DEST_DIR=""
-  local FILES=""
-  local FILE=""
-  local UPSD_USERS_FILE="/etc/nut/upsd.users"
-  local UPSMON_CONF_FILE="/etc/nut/upsmon.conf"
-  # 新/旧用户名和密码
-  local OLD_USERNAME="monusername"
-  local OLD_PASSWORD="mima"
-  local NEW_USERNAME="monusername"
-  local NEW_PASSWORD="mima"
-  local ESCAPED_NEW_USERNAME=""
-  local ESCAPED_NEW_PASSWORD=""
-  
-  apt-get update -q
-  apt-get install -y nut # nut 包通常会安装一些常见的依赖包，如 nut-client、nut-server、nut-cgi、nut-scanner，因此你可能不需要手动安装这些组件。
-  # 查看 UPS 设备硬件信息
-  # nut-scanner # 需要用户交互，在扫描过程中可能会提示用户做出选择，这个命令用于扫描计算机上连接的 UPS 设备，检查系统是否能够识别和通信，它会尝试自动检测并列出所有可用的 UPS 设备。
-  nut-scanner -U # -U 选项用于使扫描器以 "不带用户交互" 的方式运行，会自动执行扫描，不会要求用户输入任何内容，适合自动化操作。
-  green "安装NUT完成！下面进行配置"
-  # GitHub 文件路径
-  BASE_URL="https://raw.githubusercontent.com/dajiangfu/PVE/main/nut"
-  
-  # 目标目录
-  DEST_DIR="/etc/nut"
-  
-  # 文件列表
-  FILES=("nut.conf" "ups.conf" "upsd.conf" "upsd.users" "upsmon.conf" "upssched.conf" "upssched-cmd")
-  
-  # 确保目标目录存在
-  if [ ! -d "$DEST_DIR" ]; then
-    blue "目录 $DEST_DIR 不存在，开始创建..."
-    mkdir -p "$DEST_DIR"
-  fi
-  
-  # 下载文件并保存到 /etc/nut 目录
-  for FILE in "${FILES[@]}"; do
-    green "下载 $FILE..."
-    curl -fsSL -o "$DEST_DIR/$FILE" "$BASE_URL/$FILE" || {
-      red "$FILE 下载失败"
-      return 1
-    }
-  done
-  green "所有文件已下载并保存到 $DEST_DIR."
-  
-  # 提示用户输入新的用户名和密码，如果用户直接按回车（什么都不输入），变量就会自动被赋值为默认值
-  read -p "请输入新的 NUT 监控用户名 [默认: monusername]: " NEW_USERNAME
-  # 如果输入为空，设置默认值并给用户提示
-  if [ -z "$NEW_USERNAME" ]; then
-    NEW_USERNAME="monusername"
-    yellow "-> 检测到空输入，已自动应用默认用户名: monusername"
-  else
-    green "-> 用户名已自定义。"
-  fi
-  read -sp "请输入新的密码 [默认: mima]: " NEW_PASSWORD
-  printfn ""
-  # 如果输入为空，设置默认值并给用户提示
-  if [ -z "$NEW_PASSWORD" ]; then
-    NEW_PASSWORD="mima"
-    yellow "-> 检测到空输入，已自动应用默认密码: mima"
-  else
-    green "-> 密码已自定义。"
-  fi
-  
-  # 备份原始文件
-  cp "$UPSD_USERS_FILE" "$UPSD_USERS_FILE.bak"
-  cp "$UPSMON_CONF_FILE" "$UPSMON_CONF_FILE.bak"
-  
-  # 对用户名和密码进行转义，避免特殊字符导致 sed 出错
-  ESCAPED_NEW_USERNAME=$(printf '%s\n' "$NEW_USERNAME" | sed 's/[\/&]/\\&/g')
-  ESCAPED_NEW_PASSWORD=$(printf '%s\n' "$NEW_PASSWORD" | sed 's/[\/&]/\\&/g')
-  # 使用 sed 替换用户名和密码
-  sed -i "s#$OLD_USERNAME#$ESCAPED_NEW_USERNAME#g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
-  sed -i "s#$OLD_PASSWORD#$ESCAPED_NEW_PASSWORD#g" "$UPSD_USERS_FILE" "$UPSMON_CONF_FILE"
-  
-  green "正在优化配置文件权限..."
-  # 1. 设置所有权：root 拥有，nut 组可读
-  chown root:nut /etc/nut/*
-  
-  # 2. 设置普通配置文件：640 (属主读写，组只读，其他无权)
-  # 这样 nut 用户可以读取配置，但不能修改，也不能被无关人员查看
-  chmod 640 /etc/nut/*.conf
-  chmod 640 /etc/nut/upsd.users
-  
-  # 3. 设置脚本文件：750 (属主读写执行，组读执行，其他无权)
-  # 只有这个文件需要执行权限，以便触发关机动作
-  chmod 750 /etc/nut/upssched-cmd
-  
-  green "配置更新完成！重启服务..."
-  systemctl restart nut-server
-  sleep 3 # 给驱动一点初始化时间
-  systemctl restart nut-monitor
-  systemctl restart nut-upssched
-  
-  # 检查服务状态
-  if systemctl is-active --quiet nut-server nut-monitor; then
-    green "NUT 服务已启动！"
-  else
-    red "NUT 服务启动失败，请检查 /etc/nut/ups.conf 中的驱动配置。"
-  fi
-  upsc tgbox850@localhost
 }
 
 # 禁用 KSM
@@ -1099,11 +1101,11 @@ Infreq_used() {
   green "============================================================="
   green "以下为不常用功能，可根据需要自行选择安装"
   green "============================================================="
-  printfn
+  printfn ""
   green "1. 安装 GLANCES 硬件监控服务"
   green "2. 删除 GLANCES 硬件监控服务"
   blue "0. 返回上级菜单"
-  printfn
+  printfn ""
   yellow_n "请输入数字选择你想要的执行项(0-2):"
   read num
   case "$num" in
@@ -1167,19 +1169,19 @@ EOF
   green "一键配置 PVE9 系统综合脚本"
   green "此脚本由dajiangfu编写并保持开源~"
   red "仅供技术交流使用，本脚本开源，请勿用于商业用途！"
-  printfn
+  printfn ""
   green "1. 设置 web 登录页默认语言为简体中文"
   green "2. 删除 local_lvm"
   green "3. PVE 软件源更换"
   green "4. 更新 pve 系统"
   green "5. 取消无效订阅弹窗"
   green "6. 更新系统后执行系统清理程序"
-  green "7. 开启 intel 核显 SR-IOV 虚拟化直通"
-  green "8. 安装 UPS 监控软件 NUT"
+  green "7. 安装 UPS 监控软件 NUT"
+  green "8. 开启 intel 核显 SR-IOV 虚拟化直通"
   green "9. PVE 常用优化"
   green "10. 不常用功能安装"
   blue "0. 退出脚本"
-  printfn
+  printfn ""
   # read -p "请输入数字选择你想要的执行项(0-10):" num
   yellow_n "请输入数字选择你想要的执行项(0-10):"
   read num
@@ -1221,13 +1223,13 @@ EOF
   start_menu
   ;;
   7)
-  install_intel_sr_iov_dkms
+  install_ups_nut
   sleep 1s
   read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
   ;;
   8)
-  install_ups_nut
+  install_intel_sr_iov_dkms
   sleep 1s
   read -s -n1 -p "按任意键返回菜单 ... "
   start_menu
