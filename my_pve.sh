@@ -4,25 +4,6 @@
 
 # printfn 实现 printf+\n 的效果，也就是和 echo 效果一样，输出字符串后在后面自动输出 \n 换行符
 # 比如 echo "$content" > "$cfg" 就可以写成 printfn "$content" > "$cfg"
-# printfn() {
-#   printf "%s\n" "$1"
-# }
-# blue() {
-#   printf "\033[34m\033[01m%s\033[0m\n" "$1"
-# }
-# green() {
-#   printf "\033[32m\033[01m%s\033[0m\n" "$1"
-# }
-# red() {
-#   printf "\033[31m\033[01m%s\033[0m\n" "$1"
-# }
-# yellow() {
-#   printf "\033[33m\033[01m%s\033[0m\n" "$1"
-# }
-# # 不换行输出写法，增加 -n
-# yellow_n() {
-#   printf "\033[33m\033[01m%s\033[0m" "$1"
-# }
 
 printfn() {
   local IFS=" "
