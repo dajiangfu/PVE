@@ -684,41 +684,6 @@ install_intel_sr_iov_dkms() {
   fi
 }
 
-# 禁用 KSM
-close_ksm() {
-  local services=""
-  local svc=""
-  local ksm_status=""
-  
-  green "正在禁用 KSM (内核内存共享)..."
-  # 1. 禁用服务层（ksmtuned 是 PVE 自动调节 KSM 的守护进程）
-  services=("ksmtuned" "ksm")
-  for svc in "${services[@]}"; do
-    if systemctl list-unit-files | grep -q "^$svc.service"; then
-      systemctl disable --now "$svc" >/dev/null 2>&1
-    fi
-  done
-  
-  # 2. 内核层禁用
-  # 停止 KSM 扫描
-  printf 0 > /sys/kernel/mm/ksm/run
-  # 将扫描页数设为 0 以节省微量 CPU
-  printf 0 > /sys/kernel/mm/ksm/pages_to_scan
-  
-  # 3. 验证状态
-  ksm_status=$(cat /sys/kernel/mm/ksm/run)
-  if [ "$ksm_status" -eq 0 ]; then
-    green "KSM 已成功禁用 (当前内核状态: $ksm_status)"
-  else
-    # 状态 2 代表正在进行 Unmerge（拆分页面）
-    if [ "$ksm_status" -eq 2 ]; then
-       yellow "KSM 正在释放已合并的内存，请稍后再次检查..."
-    else
-       red "KSM 禁用失败，当前状态: $ksm_status"
-    fi
-  fi
-}
-
 # 更新 CPU 微码
 update_microcode() {
   local cpu_vendor=$(awk -F': ' '/vendor_id/{print $2; exit}' /proc/cpuinfo)
@@ -779,6 +744,65 @@ update_microcode() {
   current_mc=$(grep microcode /proc/cpuinfo | awk '{print $3}' | head -n1)
   green "升级后的微码版本: $current_mc (需重启刷新版本号)"
   yellow "提示：必须【重启物理机】才能将新微码加载进 CPU 硬件。"
+}
+
+# 设置 CPU governor 为 performance 模式（开机自启）
+# 通常 PVE9 安装后所有 CPU 模式默认已经是 performance
+set_cpu_performance() {
+  local governor="performance"
+  local cpu_dir="/sys/devices/system/cpu"
+  local cpu_path=""
+  local current_gov=""
+  local need_change=false
+  local sysfs_line=""
+  local core_name=""
+  
+  # 0. 检测是否已经全部是 $governor
+  # 使用 sort -V 处理 i5-13500 的 20 个核心排序，按照 0-19 而不是 0 1 10 11...19 2...9 这样
+  # for cpu_path in $(ls -d "$cpu_dir"/cpu[0-9]* 2>/dev/null | sort -V); do
+  for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
+    if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
+      current_gov=$(cat "$cpu_path/cpufreq/scaling_governor" 2>/dev/null)
+      if [ "$current_gov" != "$governor" ]; then
+        need_change=true
+        break
+      fi
+    fi
+  done
+  
+  if [ "$need_change" = false ]; then
+    green "所有 CPU governor 已是 $governor，跳过设置"
+    return 0
+  fi
+  
+  # 1. 创建持久化服务
+  apt-get update -q && apt-get install -y sysfsutils
+  yellow "正在通过 sysfsutils 配置 CPU 为 $governor 模式..."
+  for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
+    if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
+      core_name=$(basename "$cpu_path")
+      sysfs_line="devices/system/cpu/$core_name/cpufreq/scaling_governor = $governor"
+      # 检查并追加
+      grep -qxF "$sysfs_line" /etc/sysfs.conf || printfn "$sysfs_line" >> /etc/sysfs.conf
+    fi
+  done
+  systemctl enable sysfsutils
+  green "sysfsutils 配置 CPU 为 $governor 模式并启用成功"
+  # 输出结果
+  printfn "已写入 /etc/sysfs.conf，内容如下："
+  # 匹配丢弃所有以 # 开头的行。这样就过滤掉所有注释行和空白行，只显示文件中“真正有效”的内容
+  grep -v '^#' /etc/sysfs.conf | grep -v '^$'
+  # cat /etc/sysfs.conf # cat 该文件显示里面所有内容，如果你想看到注释内容可以用这条命令
+  
+  # 2. 显示状态
+  printfn "当前 CPU governor 状态:"
+  # cat /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor
+  for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
+    if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
+      # 使用 basename 提取 cpu0, cpu1 等字样
+      printfn "  $(basename "$cpu_path"): $(cat "$cpu_path/cpufreq/scaling_governor")"
+    fi
+  done
 }
 
 # THP（Transparent Huge Pages）设置为 madvise 智能模式，对不需要的程序默认关闭，对需要的程序开启
@@ -874,6 +898,41 @@ change_swa() {
   fi
 }
 
+# 禁用 KSM
+close_ksm() {
+  local services=""
+  local svc=""
+  local ksm_status=""
+  
+  green "正在禁用 KSM (内核内存共享)..."
+  # 1. 禁用服务层（ksmtuned 是 PVE 自动调节 KSM 的守护进程）
+  services=("ksmtuned" "ksm")
+  for svc in "${services[@]}"; do
+    if systemctl list-unit-files | grep -q "^$svc.service"; then
+      systemctl disable --now "$svc" >/dev/null 2>&1
+    fi
+  done
+  
+  # 2. 内核层禁用
+  # 停止 KSM 扫描
+  printf 0 > /sys/kernel/mm/ksm/run
+  # 将扫描页数设为 0 以节省微量 CPU
+  printf 0 > /sys/kernel/mm/ksm/pages_to_scan
+  
+  # 3. 验证状态
+  ksm_status=$(cat /sys/kernel/mm/ksm/run)
+  if [ "$ksm_status" -eq 0 ]; then
+    green "KSM 已成功禁用 (当前内核状态: $ksm_status)"
+  else
+    # 状态 2 代表正在进行 Unmerge（拆分页面）
+    if [ "$ksm_status" -eq 2 ]; then
+       yellow "KSM 正在释放已合并的内存，请稍后再次检查..."
+    else
+       red "KSM 禁用失败，当前状态: $ksm_status"
+    fi
+  fi
+}
+
 # PVE9 宿主机开启 SSD TRIM 优化（针对 ext4/LVM 等文件系统）
 # 通常 PVE9 安装后固态硬盘已经开启了 TRIM
 enable_ssd_trim() {
@@ -938,73 +997,14 @@ enable_ssd_trim() {
   rm -f "$log_file"
 }
 
-# 设置 CPU governor 为 performance 模式（开机自启）
-# 通常 PVE9 安装后所有 CPU 模式默认已经是 performance
-set_cpu_performance() {
-  local governor="performance"
-  local cpu_dir="/sys/devices/system/cpu"
-  local cpu_path=""
-  local current_gov=""
-  local need_change=false
-  local sysfs_line=""
-  local core_name=""
-  
-  # 0. 检测是否已经全部是 $governor
-  # 使用 sort -V 处理 i5-13500 的 20 个核心排序，按照 0-19 而不是 0 1 10 11...19 2...9 这样
-  # for cpu_path in $(ls -d "$cpu_dir"/cpu[0-9]* 2>/dev/null | sort -V); do
-  for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
-    if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
-      current_gov=$(cat "$cpu_path/cpufreq/scaling_governor" 2>/dev/null)
-      if [ "$current_gov" != "$governor" ]; then
-        need_change=true
-        break
-      fi
-    fi
-  done
-  
-  if [ "$need_change" = false ]; then
-    green "所有 CPU governor 已是 $governor，跳过设置"
-    return 0
-  fi
-  
-  # 1. 创建持久化服务
-  apt-get update -q && apt-get install -y sysfsutils
-  yellow "正在通过 sysfsutils 配置 CPU 为 $governor 模式..."
-  for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
-    if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
-      core_name=$(basename "$cpu_path")
-      sysfs_line="devices/system/cpu/$core_name/cpufreq/scaling_governor = $governor"
-      # 检查并追加
-      grep -qxF "$sysfs_line" /etc/sysfs.conf || printfn "$sysfs_line" >> /etc/sysfs.conf
-    fi
-  done
-  systemctl enable sysfsutils
-  green "sysfsutils 配置 CPU 为 $governor 模式并启用成功"
-  # 输出结果
-  printfn "已写入 /etc/sysfs.conf，内容如下："
-  # 匹配丢弃所有以 # 开头的行。这样就过滤掉所有注释行和空白行，只显示文件中“真正有效”的内容
-  grep -v '^#' /etc/sysfs.conf | grep -v '^$'
-  # cat /etc/sysfs.conf # cat 该文件显示里面所有内容，如果你想看到注释内容可以用这条命令
-  
-  # 2. 显示状态
-  printfn "当前 CPU governor 状态:"
-  # cat /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor
-  for cpu_path in $(find "$cpu_dir" -maxdepth 1 -name "cpu[0-9]*" | sort -V); do
-    if [ -f "$cpu_path/cpufreq/scaling_governor" ]; then
-      # 使用 basename 提取 cpu0, cpu1 等字样
-      printfn "  $(basename "$cpu_path"): $(cat "$cpu_path/cpufreq/scaling_governor")"
-    fi
-  done
-}
-
 # PVE 常用优化，一键执行多项
 Kernel_opt() {
-  close_ksm
   update_microcode
+  set_cpu_performance
   set_thp_madvise
   change_swa
+  close_ksm
   enable_ssd_trim
-  set_cpu_performance
 }
 
 # 安装 GLANCES 硬件监控服务
