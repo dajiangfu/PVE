@@ -463,6 +463,7 @@ install_ups_nut() {
   done
   green "所有文件已下载并保存到 $DEST_DIR."
   read -s -n1 -p "请确认 UPS 已通过 USB 线连接，按任意键继续 ..."
+  printfn ""
   
   # 提示用户输入新的用户名和密码，如果用户直接按回车（什么都不输入），变量就会自动被赋值为默认值
   read -p "请输入新的 NUT 监控用户名 [默认: monusername]: " NEW_USERNAME
