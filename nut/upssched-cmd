@@ -3,7 +3,7 @@ case $1 in
     power-off)
     logger -t upssched-cmd "UPS running on battery"
     # 获取当前电池电量
-    battery_charge=$(upsc BK650@localhost battery.charge)
+    battery_charge=$(upsc mybk650@localhost battery.charge)
     # 如果电池电量低于60%，则执行关机操作
     if [ "$battery_charge" -le 60 ]; then
       # 关闭所有虚拟机
