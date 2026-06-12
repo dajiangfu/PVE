@@ -520,7 +520,7 @@ install_ups_nut() {
   else
     red "NUT 服务启动失败，请检查 /etc/nut/ups.conf 中的驱动配置。"
   fi
-  upsc tgbox850@localhost
+  upsc BK650@localhost
 }
 
 # 开启 intel 核显 SR-IOV 虚拟化直通
