@@ -4,10 +4,10 @@ case $1 in
     logger -t upssched-cmd "UPS running on battery"
     # 获取当前电池电量
     battery_charge=$(upsc mybk650@localhost battery.charge)
-    # 如果电池电量低于60%，则执行关机操作
-    if [ "$battery_charge" -le 60 ]; then
+    # 如果电池电量低于 55%，则执行关机操作
+    if [ "$battery_charge" -le 55 ]; then
       # 关闭所有虚拟机
-      logger -t upssched-cmd "UPS battery charge is below 60%. Shutting down all VMs."
+      logger -t upssched-cmd "UPS battery charge is below 55%. Shutting down all VMs."
       qm list | awk 'NR>1 {print $1}' | xargs -I {} qm shutdown {}
       # 等待虚拟机关闭，检查每个虚拟机的状态
       for vmid in $(qm list | awk 'NR>1 {print $1}'); do
@@ -18,7 +18,7 @@ case $1 in
         logger -t upssched-cmd "VM $vmid has been shut down."
       done
       # 关闭所有LXC容器
-      logger -t upssched-cmd "UPS battery charge is below 60%. Shutting down all LXC."
+      logger -t upssched-cmd "UPS battery charge is below 55%. Shutting down all LXC."
       pct list | awk 'NR>1 {print $1}' | xargs -I {} pct shutdown {}
       # 等待容器关闭，检查每个容器的状态
       for containerid in $(pct list | awk 'NR>1 {print $1}'); do
